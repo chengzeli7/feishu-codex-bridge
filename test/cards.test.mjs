@@ -38,7 +38,7 @@ test("builds complete Card 2.0 payloads with callback actions", () => {
   assert.ok(callbacks.some((item) => item.value.action === "create_form"));
 });
 
-test("task list exposes at most the 10 most recent tasks", () => {
+test("task list shows a three-item page over at most 10 recent tasks", () => {
   const threads = Array.from({ length: 12 }, (_, index) => ({
     ...thread,
     id: `thread-${index}`,
@@ -47,9 +47,18 @@ test("task list exposes at most the 10 most recent tasks", () => {
   const card = taskListCard(threads);
   const taskCallbacks = walk(card)
     .filter((item) => item.type === "callback" && item.value.action === "progress");
-  assert.equal(taskCallbacks.length, 10);
-  assert.match(JSON.stringify(card), /最近任务 · 最多 10 条/);
-  assert.doesNotMatch(JSON.stringify(card), /任务 10/);
+  assert.equal(taskCallbacks.length, 3);
+  assert.match(JSON.stringify(card), /最近任务 · 1–3 \/ 10/);
+  assert.match(JSON.stringify(card), /任务 0/);
+  assert.doesNotMatch(JSON.stringify(card), /任务 3/);
+
+  const secondPage = taskListCard(threads, { page: 1 });
+  const secondPageJson = JSON.stringify(secondPage);
+  assert.match(secondPageJson, /最近任务 · 4–6 \/ 10/);
+  assert.match(secondPageJson, /4\. 任务 3/);
+  assert.doesNotMatch(secondPageJson, /任务 10/);
+  const nextPage = walk(card).find((item) => item.type === "callback" && item.value.action === "home" && item.value.page === 1);
+  assert.ok(nextPage);
 });
 
 test("form submit buttons use form_action_type without callback behaviors", () => {

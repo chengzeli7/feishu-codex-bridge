@@ -248,6 +248,38 @@ test("lists tasks and sends a completion card", async () => {
   }
 });
 
+test("updates the task card to the requested three-item page", async () => {
+  const threads = Array.from({ length: 10 }, (_, index) => ({
+    id: `019f0000-0000-7000-8000-${String(index).padStart(12, "0")}`,
+    name: `分页任务 ${index}`,
+    cwd: "/tmp/project",
+    status: { type: "idle" },
+    turns: []
+  }));
+  const { bridge, codex, lark, tempDir } = await makeBridge(threads[0], {
+    configOverrides: { recentThreadLimit: 10 }
+  });
+  codex.listThreads = async () => threads;
+  try {
+    const pageAction = cardActionEnvelope({
+      action: "home",
+      value: { page: 1 },
+      messageId: "om_task_list",
+      token: "task-list-token"
+    });
+    lark.emit("event", pageAction);
+    await waitFor(() => lark.updates.length === 1);
+    const updatedCard = JSON.stringify(lark.updates[0].content);
+    assert.match(updatedCard, /最近任务 · 4–6 \/ 10/);
+    assert.match(updatedCard, /分页任务 3/);
+    assert.doesNotMatch(updatedCard, /分页任务 6/);
+    assert.equal(pageAction.acknowledged, true);
+  } finally {
+    await bridge.stop();
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("opens structured task detail and updates the same card from Codex events", async () => {
   const thread = {
     id: "019f0000-0000-7000-8000-000000000120",

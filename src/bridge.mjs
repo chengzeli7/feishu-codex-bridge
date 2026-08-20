@@ -328,6 +328,7 @@ export class Bridge {
       return card(taskListCard(threads, {
         queuedCount: this.state.allQueued().length + this.state.allOperations().length,
         filter: command.filter ?? null,
+        page: command.page ?? 0,
         focusedThreadId: this.state.getChat(event.chat_id).focusedThreadId
       }));
     }
@@ -769,7 +770,11 @@ export class Bridge {
   }
 
   #commandFromAction(action, value, form) {
-    if (action === "home") return { type: "list", filter: value.filter ?? null };
+    if (action === "home") return {
+      type: "list",
+      filter: value.filter ?? null,
+      page: Number.isInteger(value.page) ? value.page : 0
+    };
     if (action === "create_form") return { type: "create_form" };
     if (action === "create") return { type: "create", workspace: form.workspace, message: form.prompt, effort: form.effort ?? "default" };
     if (action === "progress") return { type: "progress", selector: value.threadId };
