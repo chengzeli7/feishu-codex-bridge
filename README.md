@@ -57,8 +57,7 @@ Linux, Windows, group chats, multiple users, and cloud routing are not supported
 ### Recommended: Homebrew guided setup
 
 ```bash
-brew install chengzeli7/tap/feishu-codex-bridge
-feishu-codex-bridge init
+brew install chengzeli7/tap/feishu-codex-bridge && feishu-codex-bridge init
 ```
 
 The package includes the official `lark-cli`. The guided installer will:

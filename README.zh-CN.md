@@ -58,8 +58,7 @@ Linux、Windows、群聊、多用户和云端路由暂未支持。
 ### 推荐：Homebrew 引导式安装
 
 ```bash
-brew install chengzeli7/tap/feishu-codex-bridge
-feishu-codex-bridge init
+brew install chengzeli7/tap/feishu-codex-bridge && feishu-codex-bridge init
 ```
 
 安装包内置官方 `lark-cli`。引导程序会：
