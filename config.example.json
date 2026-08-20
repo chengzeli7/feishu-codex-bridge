@@ -1,0 +1,34 @@
+{
+  "allowedUserIds": [
+    "ou_replace_with_your_open_id"
+  ],
+  "allowedChatIds": [
+    "oc_replace_with_your_chat_id"
+  ],
+  "requireP2P": true,
+  "workspaces": {
+    "my-project": "/absolute/path/to/my-project"
+  },
+  "workspaceAliases": {
+    "my-project": ["主项目", "项目简称"]
+  },
+  "defaultWorkspace": "my-project",
+  "recentThreadLimit": 5,
+  "pollIntervalMs": 15000,
+  "maxQueuedMessagesPerThread": 10,
+  "maxOfflineOperations": 50,
+  "timeZone": "Asia/Shanghai",
+  "scheduleCatchUpWindowMs": 21600000,
+  "attachmentsDir": "./data/attachments",
+  "maxAttachmentBytes": 52428800,
+  "attachmentRetentionDays": 7,
+  "ffmpegBin": "/opt/homebrew/bin/ffmpeg",
+  "stateFile": "./data/state.json",
+  "eventSpoolDir": "./data/events",
+  "logFile": "./data/bridge.jsonl",
+  "lockFile": "./data/bridge.lock",
+  "codexBin": "/Applications/ChatGPT.app/Contents/Resources/codex",
+  "codexAppServerSocket": "/Users/your-name/.codex/app-server-control/app-server-control.sock",
+  "desktopSyncEnabled": true,
+  "larkBin": "lark-cli"
+}

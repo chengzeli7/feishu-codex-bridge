@@ -1,0 +1,13 @@
+.git/
+.github/
+config.local.json
+config.*.local.json
+.env
+.env.*
+data/
+dist/
+node_modules/
+coverage/
+test/
+*.log
+.DS_Store

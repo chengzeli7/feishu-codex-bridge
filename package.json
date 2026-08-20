@@ -1,0 +1,37 @@
+{
+  "name": "feishu-codex-bridge",
+  "version": "0.1.0",
+  "description": "Self-hosted Feishu/Lark remote control bridge for Codex Desktop",
+  "private": true,
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chengzeli7/feishu-codex-bridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/chengzeli7/feishu-codex-bridge/issues"
+  },
+  "homepage": "https://github.com/chengzeli7/feishu-codex-bridge#readme",
+  "type": "module",
+  "bin": {
+    "feishu-codex-bridge": "bin/feishu-codex-bridge.mjs"
+  },
+  "scripts": {
+    "start": "node src/bridge.mjs",
+    "test": "node --test",
+    "smoke:codex": "node scripts/smoke-codex.mjs",
+    "smoke:create": "node scripts/smoke-create.mjs",
+    "validate:cards": "node scripts/validate-cards.mjs",
+    "doctor": "node scripts/doctor.mjs",
+    "setup": "node scripts/setup.mjs",
+    "export:bundle": "node scripts/export-bundle.mjs",
+    "service": "node scripts/service.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@larksuite/cli": "1.0.88",
+    "ws": "8.21.1"
+  }
+}
