@@ -32,6 +32,6 @@
   },
   "dependencies": {
     "@larksuite/cli": "1.0.88",
-    "ws": "8.21.1"
+    "ws": "8.21.3"
   }
 }
