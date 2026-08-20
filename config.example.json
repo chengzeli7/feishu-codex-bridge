@@ -30,5 +30,6 @@
   "codexBin": "/Applications/ChatGPT.app/Contents/Resources/codex",
   "codexAppServerSocket": "/Users/your-name/.codex/app-server-control/app-server-control.sock",
   "desktopSyncEnabled": true,
+  "desktopAutoOpenEnabled": false,
   "larkBin": "lark-cli"
 }

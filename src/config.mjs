@@ -26,6 +26,7 @@ const DEFAULTS = {
   codexBin: "codex",
   codexAppServerSocket: null,
   desktopSyncEnabled: false,
+  desktopAutoOpenEnabled: false,
   larkBin: "lark-cli"
 };
 
@@ -102,6 +103,7 @@ export async function loadConfig(configPath = process.env.BRIDGE_CONFIG ?? "./co
     throw new Error("codexAppServerSocket must be null or an absolute path");
   }
   if (typeof config.desktopSyncEnabled !== "boolean") throw new Error("desktopSyncEnabled must be a boolean");
+  if (typeof config.desktopAutoOpenEnabled !== "boolean") throw new Error("desktopAutoOpenEnabled must be a boolean");
   if (config.desktopSyncEnabled && process.platform === "darwin" && path.resolve(config.codexBin) !== DESKTOP_CODEX_BIN) {
     throw new Error(`desktopSyncEnabled requires the Codex Desktop runtime: ${DESKTOP_CODEX_BIN}`);
   }

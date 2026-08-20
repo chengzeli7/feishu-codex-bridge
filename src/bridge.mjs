@@ -105,7 +105,7 @@ export class Bridge {
     this.state = state ?? new StateStore(config.stateFile);
     this.logger = logger ?? new Logger(config.logFile);
     this.lock = lock ?? new InstanceLock(config.lockFile);
-    this.desktopSync = desktopSync ?? new DesktopSync({ enabled: config.desktopSyncEnabled === true });
+    this.desktopSync = desktopSync ?? new DesktopSync({ enabled: config.desktopAutoOpenEnabled === true });
     this.attachments = attachments ?? new AttachmentManager({
       root: config.attachmentsDir ?? path.join(path.dirname(config.stateFile), "attachments"),
       maxBytes: config.maxAttachmentBytes,

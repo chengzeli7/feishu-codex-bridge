@@ -93,6 +93,7 @@ export function buildBridgeConfig({
     codexBin: DESKTOP_CODEX_BIN,
     codexAppServerSocket: defaultCodexAppServerSocket(),
     desktopSyncEnabled: true,
+    desktopAutoOpenEnabled: false,
     larkBin
   };
 }

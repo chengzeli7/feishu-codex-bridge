@@ -13,6 +13,7 @@ test("loads and resolves a valid single-user configuration", async () => {
     const config = await loadConfig(file);
     assert.equal(config.requireP2P, true);
     assert.equal(config.desktopSyncEnabled, false);
+    assert.equal(config.desktopAutoOpenEnabled, false);
     assert.equal(config.codexAppServerSocket, null);
     assert.equal(config.stateFile, path.join(directory, "data/state.json"));
     assert.equal(config.workspaces.app, "/tmp/app");
@@ -47,6 +48,21 @@ test("requires the Desktop Codex runtime when Desktop sync is enabled", async ()
       desktopSyncEnabled: true
     }));
     if (process.platform === "darwin") await assert.rejects(loadConfig(file), /Codex Desktop runtime/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("rejects a non-boolean Desktop auto-open setting", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "bridge-config-"));
+  const file = path.join(directory, "config.json");
+  try {
+    await writeFile(file, JSON.stringify({
+      allowedUserIds: ["ou_test"],
+      workspaces: { app: "/tmp/app" },
+      desktopAutoOpenEnabled: "yes"
+    }));
+    await assert.rejects(loadConfig(file), /desktopAutoOpenEnabled/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

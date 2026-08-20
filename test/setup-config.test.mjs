@@ -39,6 +39,7 @@ test("builds a desktop-synced configuration without credentials", () => {
   assert.deepEqual(config.allowedChatIds, ["oc_home_chat"]);
   assert.deepEqual(config.workspaceAliases.home, ["home", "家庭项目"]);
   assert.equal(config.desktopSyncEnabled, true);
+  assert.equal(config.desktopAutoOpenEnabled, false);
   assert.equal(config.codexBin, "/Applications/ChatGPT.app/Contents/Resources/codex");
   assert.equal(Object.hasOwn(config, "appSecret"), false);
 });

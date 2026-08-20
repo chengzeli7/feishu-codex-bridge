@@ -17,6 +17,8 @@ A single-user, self-hosted Feishu/Lark remote control console for Codex Desktop.
 - Inspect the current stage, plan, tools/MCP calls, commands, changed files, errors, and elapsed time.
 - Update an opened detail card in place with a roughly two-second debounce.
 - Share tasks, user messages, replies, and completion state with Codex Desktop.
+- Keep Desktop task synchronization passive by default so background activity
+  does not open or take over task windows.
 - Send images, files, and short voice messages.
 - Queue messages safely, recover from disconnects, and send completion notifications.
 - Create one-time, daily, and weekly schedules that run locally.

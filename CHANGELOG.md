@@ -4,6 +4,9 @@ All notable public changes are documented here. This project follows [Semantic V
 
 ## [Unreleased]
 
+- Disabled automatic `codex://threads/...` navigation by default while keeping
+  shared Desktop task synchronization enabled, preventing cross-window task
+  ownership conflicts.
 - Added a Codex-managed installation guide that can be invoked with one prompt
   and uses the Node.js runtime bundled with ChatGPT Desktop when available.
 - Made the LaunchAgent retain the exact persistent Node.js runtime used during

@@ -136,7 +136,7 @@ function cardActionEnvelope({ action, value = {}, messageId = "om_bot_1", token 
   };
 }
 
-async function makeBridge(thread, { pollIntervalMs = 60_000, codexReady = true, codexDaemon, startOrder } = {}) {
+async function makeBridge(thread, { pollIntervalMs = 60_000, codexReady = true, codexDaemon, startOrder, configOverrides = {} } = {}) {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), "codex-feishu-bridge-"));
   const codex = new FakeCodex(thread);
   codex.ready = codexReady;
@@ -160,7 +160,8 @@ async function makeBridge(thread, { pollIntervalMs = 60_000, codexReady = true, 
       maxQueuedMessagesPerThread: 10,
       detailUpdateDebounceMs: 10,
       detailCardTokenTtlMs: 60_000,
-      stateFile: path.join(tempDir, "state.json")
+      stateFile: path.join(tempDir, "state.json"),
+      ...configOverrides
     },
     codex,
     codexDaemon,
@@ -171,6 +172,21 @@ async function makeBridge(thread, { pollIntervalMs = 60_000, codexReady = true, 
   await bridge.start();
   return { bridge, codex, lark, tempDir };
 }
+
+test("keeps automatic Desktop navigation disabled while shared sync is enabled", async () => {
+  const { bridge, tempDir } = await makeBridge(null, {
+    configOverrides: {
+      desktopSyncEnabled: true,
+      desktopAutoOpenEnabled: false
+    }
+  });
+  try {
+    assert.equal(bridge.desktopSync.enabled, false);
+  } finally {
+    await bridge.stop();
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
 
 test("starts the official daemon before reconnecting the Codex client", async () => {
   const startOrder = [];

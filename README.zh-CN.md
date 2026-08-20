@@ -19,6 +19,7 @@ Self-hosted Feishu/Lark remote control bridge for Codex Desktop. Create and cont
 - 在飞书查看当前阶段、执行计划、工具/MCP、命令、修改文件、错误和耗时。
 - 打开详细进展后，以约 2 秒防抖更新同一张卡片。
 - 在 Codex Desktop 和飞书之间共享任务、用户消息、回复与完成状态。
+- Desktop 任务同步默认不自动打开或接管窗口，避免后台任务造成跨窗口冲突。
 - 支持图片、文件、短语音、任务排队、断线恢复和完成通知。
 - 支持一次性、每日和每周本地定时任务。
 - 使用用户、私聊和项目目录白名单限制远程访问范围。
