@@ -158,7 +158,9 @@ async function install() {
     await chmod(installedState, 0o600);
   }
 
-  const nodeBin = existsSync("/opt/homebrew/bin/node") ? "/opt/homebrew/bin/node" : execFileSync("which", ["node"], { encoding: "utf8" }).trim();
+  const nodeBin = existsSync(process.execPath)
+    ? process.execPath
+    : execFileSync("which", ["node"], { encoding: "utf8" }).trim();
   const standardOut = path.join(logsRoot, "service.stdout.log");
   const standardError = path.join(logsRoot, "service.stderr.log");
   const plist = `<?xml version="1.0" encoding="UTF-8"?>

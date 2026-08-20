@@ -54,7 +54,25 @@ Linux, Windows, group chats, multiple users, and cloud routing are not supported
 
 ## Quick Start
 
-### Recommended: Homebrew guided setup
+### Easiest: ask Codex to install it
+
+Open Codex on the target Mac, start a new task, and send this entire prompt:
+
+```text
+Install and configure Feishu Codex Bridge on this Mac by following:
+https://github.com/chengzeli7/feishu-codex-bridge/blob/main/docs/CODEX_INSTALL.md
+Read the guide and then execute it autonomously. Pause only when the guide says
+that I must complete a browser, Feishu, macOS, or pairing action.
+```
+
+This path does not require the user to install or operate Homebrew. Codex uses
+the persistent Node.js runtime bundled with ChatGPT Desktop when it is
+available, downloads the source, installs dependencies, runs guided setup, and
+verifies the service. It pauses only for browser, Feishu, macOS, and pairing
+actions that require the user. Codex may still request normal permission to
+download files or install a per-user background service.
+
+### Optional: install it yourself with Homebrew
 
 ```bash
 brew install chengzeli7/tap/feishu-codex-bridge && feishu-codex-bridge init
@@ -69,6 +87,21 @@ The package includes the official `lark-cli`. The guided installer will:
 5. run health checks, install the LaunchAgent, and confirm the service is running.
 
 Application creation and browser authorization are handled by the official `lark-cli config init --new` flow. The pairing message cannot be skipped because it proves which Feishu user may remotely control the Mac.
+
+### Why no MCP or plugin is required
+
+The bridge is a local transport and background service: it receives Feishu
+events and talks to the Codex Desktop runtime. MCP is designed to expose tools
+and data sources to Codex, so adding an MCP server would not remove Feishu app
+creation, local service installation, or secure user pairing.
+
+A [Codex skill](https://developers.openai.com/codex/skills) is useful for making
+installation, upgrades, diagnostics, and recovery repeatable. For public
+distribution, OpenAI recommends packaging reusable skills as a
+[plugin](https://developers.openai.com/plugins/build/plugins). A future plugin
+can make this workflow discoverable in the Plugins Directory, but it would run
+the same local installer and require the same Feishu security checkpoints. The
+direct Codex prompt above is currently the shortest installation path.
 
 ### Install from source
 

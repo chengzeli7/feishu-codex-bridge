@@ -80,7 +80,7 @@ async function main() {
     throw new Error("ChatGPT Desktop is not installed at /Applications/ChatGPT.app");
   }
   if (!existsSync(bundledLark) && spawnSync("/usr/bin/which", ["lark-cli"]).status !== 0) {
-    throw new Error("lark-cli is unavailable; reinstall the Homebrew package or run npm ci");
+    throw new Error("lark-cli is unavailable; install project dependencies with npm ci");
   }
   console.log("Prerequisites are ready.");
 
@@ -106,7 +106,7 @@ Open the bot in Feishu and send:
   任务
 
 Configuration: ${configPath}
-Run “feishu-codex-bridge status” at any time to check the service.`);
+Send “健康” in Feishu or ask Codex to check the service status at any time.`);
 }
 
 main().catch((error) => {

@@ -55,7 +55,23 @@ Linux、Windows、群聊、多用户和云端路由暂未支持。
 
 ## 快速开始
 
-### 推荐：Homebrew 引导式安装
+### 最简单：直接让 Codex 安装
+
+在目标 Mac 上打开 Codex，新建任务，把下面整段发送给 Codex：
+
+```text
+请按照下面的 Codex 托管安装指南，在这台 Mac 上安装并配置 Feishu Codex Bridge：
+https://github.com/chengzeli7/feishu-codex-bridge/blob/main/docs/CODEX_INSTALL.md
+阅读指南后直接自主执行。只有指南明确要求我完成浏览器、飞书、macOS 授权或配对操作时
+才暂停。
+```
+
+这个流程不要求用户安装或操作 Homebrew。Codex 会优先使用 ChatGPT Desktop 内置的持久化
+Node.js 运行时，自动下载源码、安装依赖、完成引导配置并验证服务；只在浏览器、飞书、
+macOS 授权和配对等必须由用户完成的步骤暂停。下载文件或安装用户级后台服务时，Codex
+仍可能请求正常权限。
+
+### 可选：自己使用 Homebrew 安装
 
 ```bash
 brew install chengzeli7/tap/feishu-codex-bridge && feishu-codex-bridge init
@@ -70,6 +86,17 @@ brew install chengzeli7/tap/feishu-codex-bridge && feishu-codex-bridge init
 5. 执行健康检查、安装 LaunchAgent，并确认服务已经运行。
 
 应用创建与浏览器授权复用官方 `lark-cli config init --new` 流程。配对消息不能静默跳过，因为它用于证明哪个飞书用户有权远程控制这台 Mac。
+
+### 为什么当前不要求 MCP 或 Plugin
+
+桥接器本质上是本机消息通道和后台服务：接收飞书事件，再连接 Codex Desktop 运行时。
+MCP 的主要用途是向 Codex 暴露工具和数据源，无法代替飞书应用创建、本机服务安装和安全配对。
+
+[Codex Skill](https://developers.openai.com/codex/skills) 很适合固化安装、升级、诊断和恢复流程。
+OpenAI 官方建议在面向其他用户分发时，把可复用 Skill 打包成
+[Plugin](https://developers.openai.com/plugins/build/plugins)。后续 Plugin 可以让这个流程出现在
+插件目录里，但它底层仍会运行同一个本机安装器，也不能跳过飞书安全确认。现阶段，直接把
+上面的提示词发给 Codex 是步骤最少的安装方式。
 
 ### 从源码安装
 
