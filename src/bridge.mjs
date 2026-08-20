@@ -32,7 +32,7 @@ import { DesktopSync } from "./desktop-sync.mjs";
 import { CodexDaemonManager } from "./codex-daemon.mjs";
 import { enableDesktopDaemonEnvironment } from "./desktop-daemon-env.mjs";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 const EVENT_KEYS = ["im.message.receive_v1", "card.action.trigger"];
 const DETAIL_ITEM_PAGE_SIZE = 24;
 const MUTATING_ACTIONS = new Set([

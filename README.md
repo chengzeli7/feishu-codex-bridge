@@ -4,11 +4,11 @@
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.1-orange.svg)](CHANGELOG.md)
 
 A single-user, self-hosted Feishu/Lark remote control console for Codex Desktop. Create and continue Codex tasks, inspect live progress, and receive completion notifications from Feishu while all execution stays on your own Mac.
 
-> `v0.1.0` is the first public beta. This project integrates with the local app-server capabilities currently shipped with Codex Desktop, so a future Codex update may require compatibility changes.
+> `v0.1.1` is the current public beta. This project integrates with the local app-server capabilities currently shipped with Codex Desktop, so a future Codex update may require compatibility changes.
 
 ## Features
 

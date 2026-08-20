@@ -4,6 +4,14 @@ All notable public changes are documented here. This project follows [Semantic V
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-20
+
+- Fixed Codex Desktop task ownership conflicts by sharing the official local
+  app-server and releasing a completed task's writer subscription.
+- Added recoverable migration for legacy bridge and app-server LaunchAgents so
+  older services no longer retain the single-instance lock.
+- Added a dedicated **Back to task list** action to detailed progress cards and
+  restored the compact task list to the five most recent tasks.
 - Disabled automatic `codex://threads/...` navigation by default while keeping
   shared Desktop task synchronization enabled, preventing cross-window task
   ownership conflicts.
@@ -11,6 +19,8 @@ All notable public changes are documented here. This project follows [Semantic V
   and uses the Node.js runtime bundled with ChatGPT Desktop when available.
 - Made the LaunchAgent retain the exact persistent Node.js runtime used during
   installation, removing Homebrew as a requirement for Codex-managed setup.
+- Added offline Card 2.0 validation for CI, an opt-in live `lark-cli` dry-run,
+  expanded regression coverage, and repository ownership metadata.
 
 ## [0.1.0] - 2026-08-20
 
@@ -28,5 +38,6 @@ First public beta.
 - Added secret redaction and filtering of raw reasoning, full tool arguments, and full terminal output.
 - Added an interactive setup flow, sanitized offline bundle export, macOS LaunchAgent installer, tests, and Card 2.0 validation.
 
-[Unreleased]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/chengzeli7/feishu-codex-bridge/releases/tag/v0.1.0

@@ -39,7 +39,7 @@ export class CodexClient extends EventEmitter {
       if (this.socketPath) await this.#startWebSocket();
       else this.#startStdio();
       await this.request("initialize", {
-        clientInfo: { name: "feishu-codex-bridge", version: "0.1.0" },
+        clientInfo: { name: "feishu-codex-bridge", version: "0.1.1" },
         capabilities: { experimentalApi: true }
       });
       this.notify("initialized");

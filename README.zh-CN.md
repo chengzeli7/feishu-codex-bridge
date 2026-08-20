@@ -4,13 +4,13 @@
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.1-orange.svg)](CHANGELOG.md)
 
 一个运行在个人 Mac 上的单用户、自托管飞书 Codex 远程控制台。
 
 Self-hosted Feishu/Lark remote control bridge for Codex Desktop. Create and continue Codex tasks, inspect live progress, and receive completion notifications from Feishu while all execution remains on your own Mac.
 
-> `v0.1.0` 是首个公开 Beta。项目依赖 Codex Desktop 当前提供的本地 app-server 能力，Codex 更新后可能需要同步适配。
+> `v0.1.1` 是当前公开 Beta。项目依赖 Codex Desktop 当前提供的本地 app-server 能力，Codex 更新后可能需要同步适配。
 
 ## 能做什么
 

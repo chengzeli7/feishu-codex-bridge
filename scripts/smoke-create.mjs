@@ -14,8 +14,8 @@ try {
   await client.start();
   const created = await client.createTask({
     cwd,
-    name: "Feishu Codex Bridge v0.1.0 smoke test",
-    prompt: "This is the Feishu Codex Bridge v0.1.0 task creation smoke test. Do not modify files. Reply exactly: create smoke passed",
+    name: "Feishu Codex Bridge v0.1.1 smoke test",
+    prompt: "This is the Feishu Codex Bridge v0.1.1 task creation smoke test. Do not modify files. Reply exactly: create smoke passed",
     effort: "medium"
   });
   console.log(`created thread ${created.thread.id}`);

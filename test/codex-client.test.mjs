@@ -32,7 +32,7 @@ test("connects to the shared Desktop app-server over a Unix WebSocket", async ()
     await client.start();
     assert.equal(client.ready, true);
     assert.equal(sent[0].method, "initialize");
-    assert.equal(sent[0].params.clientInfo.version, "0.1.0");
+    assert.equal(sent[0].params.clientInfo.version, "0.1.1");
     assert.equal(sent[1].method, "initialized");
   } finally {
     await client.stop();
