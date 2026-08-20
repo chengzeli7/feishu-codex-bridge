@@ -8,6 +8,7 @@ import { defaultCodexAppServerSocket } from "../src/config.mjs";
 import { enableDesktopDaemonEnvironment } from "../src/desktop-daemon-env.mjs";
 
 const LABEL = "io.github.chengzeli7.feishu-codex-bridge";
+const LEGACY_LABELS = ["com.chengze.codex-feishu-bridge", "com.chengze.codex-feishu-app-server"];
 const VERSION = "0.1.0";
 const DESKTOP_CODEX_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -53,17 +54,17 @@ function waitForOfficialDaemon(timeoutMs = 15_000) {
   throw new Error("official Codex app-server daemon did not become ready within 15 seconds");
 }
 
-function launchAgentLoaded() {
-  return spawnSync("launchctl", ["print", `${domain}/${LABEL}`], { stdio: "ignore" }).status === 0;
+function launchAgentLoaded(label = LABEL) {
+  return spawnSync("launchctl", ["print", `${domain}/${label}`], { stdio: "ignore" }).status === 0;
 }
 
-function waitForLaunchAgentState(expectedLoaded, timeoutMs = 5_000) {
+function waitForLaunchAgentState(expectedLoaded, timeoutMs = 5_000, label = LABEL) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (launchAgentLoaded() === expectedLoaded) return true;
+    if (launchAgentLoaded(label) === expectedLoaded) return true;
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
   }
-  return launchAgentLoaded() === expectedLoaded;
+  return launchAgentLoaded(label) === expectedLoaded;
 }
 
 function bootstrapLaunchAgent() {
@@ -78,8 +79,22 @@ function bootstrapLaunchAgent() {
   throw new Error(failure);
 }
 
+async function migrateLegacyLaunchAgents() {
+  for (const label of LEGACY_LABELS) {
+    if (launchAgentLoaded(label)) {
+      shell("launchctl", ["bootout", `${domain}/${label}`], { allowFailure: true, capture: true });
+      if (!waitForLaunchAgentState(false, 5_000, label)) throw new Error(`${label} did not stop within 5 seconds`);
+    }
+    const legacyPlist = path.join(agentsRoot, `${label}.plist`);
+    if (!existsSync(legacyPlist)) continue;
+    const preservedPath = `${legacyPlist}.migrated-${stamp()}`;
+    await rename(legacyPlist, preservedPath);
+    console.log(`preserved legacy LaunchAgent ${label} at ${preservedPath}`);
+  }
+}
+
 async function install() {
-  const desktopWasRunning = spawnSync("/usr/bin/pgrep", ["-x", "ChatGPT"], { stdio: "ignore" }).status === 0;
+  const desktopWasRunning = spawnSync("/usr/bin/pgrep", ["-f", "/Applications/ChatGPT.app/Contents/Frameworks/Codex Framework"], { stdio: "ignore" }).status === 0;
   const releaseRoot = path.join(releasesRoot, `${VERSION}-${stamp()}`);
   await mkdir(releasesRoot, { recursive: true, mode: 0o700 });
   await cp(sourceRoot, releaseRoot, {
@@ -199,6 +214,7 @@ async function install() {
   enableDesktopDaemonEnvironment();
   shell(DESKTOP_CODEX_BIN, ["app-server", "daemon", "bootstrap"]);
   waitForOfficialDaemon();
+  await migrateLegacyLaunchAgents();
   shell("launchctl", ["bootout", `${domain}/${LABEL}`], { allowFailure: true, capture: true });
   if (!waitForLaunchAgentState(false)) throw new Error(`${LABEL} did not stop within 5 seconds`);
   shell("launchctl", ["enable", `${domain}/${LABEL}`]);
