@@ -9,7 +9,7 @@ const DEFAULTS = {
   workspaces: {},
   workspaceAliases: {},
   defaultWorkspace: null,
-  recentThreadLimit: 5,
+  recentThreadLimit: 10,
   pollIntervalMs: 15_000,
   maxQueuedMessagesPerThread: 10,
   maxOfflineOperations: 50,
@@ -71,8 +71,8 @@ export async function loadConfig(configPath = process.env.BRIDGE_CONFIG ?? "./co
   if (config.defaultWorkspace !== null && !Object.hasOwn(config.workspaces, config.defaultWorkspace)) {
     throw new Error("defaultWorkspace must reference a configured workspace alias");
   }
-  if (!Number.isInteger(config.recentThreadLimit) || config.recentThreadLimit < 1 || config.recentThreadLimit > 20) {
-    throw new Error("recentThreadLimit must be an integer between 1 and 20");
+  if (!Number.isInteger(config.recentThreadLimit) || config.recentThreadLimit < 1 || config.recentThreadLimit > 10) {
+    throw new Error("recentThreadLimit must be an integer between 1 and 10");
   }
   if (!Number.isInteger(config.pollIntervalMs) || config.pollIntervalMs < 5_000) {
     throw new Error("pollIntervalMs must be an integer >= 5000");

@@ -13,7 +13,7 @@
     "my-project": ["主项目", "项目简称"]
   },
   "defaultWorkspace": "my-project",
-  "recentThreadLimit": 5,
+  "recentThreadLimit": 10,
   "pollIntervalMs": 15000,
   "maxQueuedMessagesPerThread": 10,
   "maxOfflineOperations": 50,

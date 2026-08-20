@@ -139,6 +139,35 @@ test("refreshes an active task summary before steering the current turn", async 
   }
 });
 
+test("unsubscribes a completed task to release its writer", async () => {
+  const requests = [];
+  const child = new EventEmitter();
+  child.stdin = new PassThrough();
+  child.stdout = new PassThrough();
+  child.stderr = new PassThrough();
+  child.kill = () => true;
+  child.stdin.on("data", (chunk) => {
+    for (const line of chunk.toString().trim().split("\n")) {
+      const request = JSON.parse(line);
+      if (!Object.hasOwn(request, "id")) continue;
+      requests.push(request);
+      const result = request.method === "thread/unsubscribe" ? { status: "unsubscribed" } : {};
+      queueMicrotask(() => child.stdout.write(`${JSON.stringify({ id: request.id, result })}\n`));
+    }
+  });
+  const client = new CodexClient({ spawn: () => child, bin: "/bin/codex" });
+  try {
+    await client.start();
+    const result = await client.unsubscribeThread("thread-1");
+    assert.equal(result.status, "unsubscribed");
+    assert.deepEqual(requests.find((item) => item.method === "thread/unsubscribe")?.params, {
+      threadId: "thread-1"
+    });
+  } finally {
+    await client.stop();
+  }
+});
+
 test("uses the known turn id while an active task detail is still syncing", async () => {
   const requests = [];
   const child = new EventEmitter();

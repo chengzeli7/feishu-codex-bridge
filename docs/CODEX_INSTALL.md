@@ -90,7 +90,14 @@ Do not claim success while the installer is waiting for any of these actions.
 
 ## 6. Verify and report
 
-After setup completes, run `scripts/doctor.mjs` and
+After setup completes, tell the user that Codex Desktop must be quit and reopened
+once before the first Feishu task is sent. If this guide is being executed inside
+Codex Desktop, do not quit the app on the user's behalf: finish the current
+installation response, ask the user to restart Codex, and continue verification
+after they return. This restart moves Desktop onto the same local app-server as
+the bridge and prevents a task writer conflict.
+
+After that restart, run `scripts/doctor.mjs` and
 `scripts/service.mjs status` with the same Node.js binary. Confirm that both the
 official Codex daemon and the bridge LaunchAgent are running. Ask the user to
 send `健康` to the Feishu bot and confirm that the bot replies.

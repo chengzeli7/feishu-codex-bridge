@@ -18,7 +18,7 @@ Self-hosted Feishu/Lark remote control bridge for Codex Desktop. Create and cont
 - 回复任务卡或继续表达，将消息精确发送到对应任务。
 - 在飞书查看当前阶段、执行计划、工具/MCP、命令、修改文件、错误和耗时。
 - 打开详细进展后，以约 2 秒防抖更新同一张卡片。
-- 在 Codex Desktop 和飞书之间共享任务、用户消息、回复与完成状态。
+- 在 Codex Desktop 和飞书之间共享任务、用户消息、回复与完成状态，并在任务结束后释放会话写锁。
 - Desktop 任务同步默认不自动打开或接管窗口，避免后台任务造成跨窗口冲突。
 - 支持图片、文件、短语音、任务排队、断线恢复和完成通知。
 - 支持一次性、每日和每周本地定时任务。
@@ -269,6 +269,7 @@ npm run service -- uninstall
 ## 已知限制
 
 - Mac 睡眠或关机时无法处理飞书消息；唤醒后服务会恢复。
+- 首次安装或从旧版本升级后，需要退出并重新打开一次 Codex Desktop，让它接入与桥接相同的本地 app-server。
 - Desktop 正在执行且被另一个进程持有的回合不能直接 steer，后续消息会安全排队。
 - 当前 Codex daemon 尚未实现 `thread/items/list` 时，详细进展会回退到 `thread/read` 本地分页。
 - 卡片更新 token 失效后停止自动更新，可点击“刷新”获取新状态。

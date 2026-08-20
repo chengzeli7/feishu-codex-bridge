@@ -143,7 +143,7 @@ export function taskListCard(threads, { queuedCount = 0, filter = null, focusedT
   const completedCount = threads.filter((thread) => effectiveStatus(thread).label === "已完成").length;
   const visible = filter === "active" ? threads.filter((thread) => effectiveStatus(thread).label.includes("运行")) :
     filter === "completed" ? threads.filter((thread) => effectiveStatus(thread).label === "已完成") : threads;
-  const taskElements = visible.length > 0 ? visible.slice(0, 8).map((thread, index) => taskBlock(thread, index, focusedThreadId)) : [
+  const taskElements = visible.length > 0 ? visible.slice(0, 10).map((thread, index) => taskBlock(thread, index, focusedThreadId)) : [
     { tag: "markdown", content: "<font color='grey'>当前没有符合条件的任务。</font>" }
   ];
   return baseCard({
@@ -164,7 +164,7 @@ export function taskListCard(threads, { queuedCount = 0, filter = null, focusedT
         border: { color: "grey-100", corner_radius: "8px" },
         padding: "8px",
         vertical_spacing: "8px",
-        header: { title: plain(filter === "active" ? "正在运行" : filter === "completed" ? "最近完成" : "最近任务") },
+        header: { title: plain(filter === "active" ? "正在运行 · 最多 10 条" : filter === "completed" ? "最近完成 · 最多 10 条" : "最近任务 · 最多 10 条") },
         elements: taskElements
       },
       actionRow([
@@ -395,7 +395,8 @@ export function progressDetailCard(thread, detail, { queue = [] } = {}) {
         buttonColumn("返回摘要", "progress", { threadId: thread.id }),
         buttonColumn("继续任务", "send_form", { threadId: thread.id })
       ]),
-      ...(managementButtons.length ? [actionRow(managementButtons)] : [])
+      ...(managementButtons.length ? [actionRow(managementButtons)] : []),
+      actionRow([buttonColumn("返回任务列表", "home", {})])
     ],
     summary: `${threadTitle(thread)}：${detail.currentStage}`
   });

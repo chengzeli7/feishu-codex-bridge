@@ -30,6 +30,7 @@ import { Logger } from "./logger.mjs";
 import { InstanceLock } from "./instance-lock.mjs";
 import { DesktopSync } from "./desktop-sync.mjs";
 import { CodexDaemonManager } from "./codex-daemon.mjs";
+import { enableDesktopDaemonEnvironment } from "./desktop-daemon-env.mjs";
 
 const VERSION = "0.1.0";
 const EVENT_KEYS = ["im.message.receive_v1", "card.action.trigger"];
@@ -959,7 +960,11 @@ export class Bridge {
 
   async #handleTurnCompleted({ threadId, turn }) {
     const watch = this.state.getWatch(threadId);
-    if (!watch || watch.notified || (watch.turnId && watch.turnId !== turn.id)) return;
+    if (!watch || watch.notified) {
+      await this.#releaseCodexThread(threadId);
+      return;
+    }
+    if (watch.turnId && watch.turnId !== turn.id) return;
     await this.#notifyCompletion(threadId, turn.status, watch);
   }
 
@@ -1211,17 +1216,32 @@ export class Bridge {
       this.state.markNotified(threadId);
       await this.state.save();
       this.logger.info("Codex completion notification muted", { threadId, turnStatus });
+      await this.#releaseCodexThread(threadId);
       return;
     }
-    await this.#syncDesktopThread(threadId);
-    const resultCard = completionCard(thread, turnStatus, resultOverride);
-    const sent = watch.messageId ?
-      await this.lark.replyCard(watch.messageId, resultCard, `done-${threadId}-${watch.turnId ?? "latest"}`) :
-      await this.lark.sendCard({ chatId: watch.chatId, card: resultCard, idempotencyKey: `done-${threadId}-${watch.turnId ?? "latest"}` });
-    if (sent?.message_id) this.state.bindMessage(sent.message_id, { threadId, chatId: watch.chatId, kind: "completion" });
-    this.state.markNotified(threadId);
-    await this.state.save();
-    this.logger.info("Codex completion notification sent", { threadId, turnStatus });
+    try {
+      await this.#syncDesktopThread(threadId);
+      const resultCard = completionCard(thread, turnStatus, resultOverride);
+      const sent = watch.messageId ?
+        await this.lark.replyCard(watch.messageId, resultCard, `done-${threadId}-${watch.turnId ?? "latest"}`) :
+        await this.lark.sendCard({ chatId: watch.chatId, card: resultCard, idempotencyKey: `done-${threadId}-${watch.turnId ?? "latest"}` });
+      if (sent?.message_id) this.state.bindMessage(sent.message_id, { threadId, chatId: watch.chatId, kind: "completion" });
+      this.state.markNotified(threadId);
+      await this.state.save();
+      this.logger.info("Codex completion notification sent", { threadId, turnStatus });
+    } finally {
+      await this.#releaseCodexThread(threadId);
+    }
+  }
+
+  async #releaseCodexThread(threadId) {
+    if (typeof this.codex.unsubscribeThread !== "function") return;
+    try {
+      const result = await this.codex.unsubscribeThread(threadId);
+      this.logger.info("Released Codex task writer", { threadId, status: result?.status ?? "unknown" });
+    } catch (error) {
+      this.logger.warn("Codex task writer release failed", { threadId, error: error.message });
+    }
   }
 
   async #handleServerRequest(request) {
@@ -1367,6 +1387,11 @@ export class Bridge {
 }
 
 async function main() {
+  try {
+    enableDesktopDaemonEnvironment();
+  } catch (error) {
+    console.warn(`Codex Desktop shared app-server mode could not be enabled: ${error.message}`);
+  }
   const config = await loadConfig();
   const bridge = new Bridge({ config });
   let shuttingDown = false;

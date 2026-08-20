@@ -98,7 +98,10 @@ async function main() {
   runNode("scripts/service.mjs", ["status"]);
 
   heading(5, "Setup complete");
-  console.log(`Feishu Codex Bridge is ready.
+  console.log(`Feishu Codex Bridge is installed.
+
+Quit and reopen Codex Desktop once now. This one-time restart makes Desktop and
+the Feishu bridge share the same task writer and prevents "opened in another app".
 
 Open the bot in Feishu and send:
   版本

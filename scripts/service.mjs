@@ -5,11 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultCodexAppServerSocket } from "../src/config.mjs";
+import { enableDesktopDaemonEnvironment } from "../src/desktop-daemon-env.mjs";
 
 const LABEL = "io.github.chengzeli7.feishu-codex-bridge";
 const VERSION = "0.1.0";
 const DESKTOP_CODEX_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
-const LOCAL_DAEMON_ENV = "CODEX_APP_SERVER_USE_LOCAL_DAEMON";
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const userHome = os.homedir();
 const supportRoot = path.join(userHome, "Library", "Application Support", "CodexFeishuBridge");
@@ -79,6 +79,7 @@ function bootstrapLaunchAgent() {
 }
 
 async function install() {
+  const desktopWasRunning = spawnSync("/usr/bin/pgrep", ["-x", "ChatGPT"], { stdio: "ignore" }).status === 0;
   const releaseRoot = path.join(releasesRoot, `${VERSION}-${stamp()}`);
   await mkdir(releasesRoot, { recursive: true, mode: 0o700 });
   await cp(sourceRoot, releaseRoot, {
@@ -122,6 +123,10 @@ async function install() {
       installedConfig[key] = sourceConfig[key];
       changed = true;
     }
+  }
+  if (installedConfig.recentThreadLimit === undefined || installedConfig.recentThreadLimit === 5 || installedConfig.recentThreadLimit > 10) {
+    installedConfig.recentThreadLimit = 10;
+    changed = true;
   }
   for (const [alias, workspace] of Object.entries(installedConfig.workspaces ?? {})) {
     if (sourceConfig.workspaces?.[alias] === undefined && !existsSync(workspace)) {
@@ -191,7 +196,7 @@ async function install() {
 `;
   await writeFile(plistPath, plist, { mode: 0o600 });
   shell("plutil", ["-lint", plistPath]);
-  shell("launchctl", ["setenv", LOCAL_DAEMON_ENV, "1"]);
+  enableDesktopDaemonEnvironment();
   shell(DESKTOP_CODEX_BIN, ["app-server", "daemon", "bootstrap"]);
   waitForOfficialDaemon();
   shell("launchctl", ["bootout", `${domain}/${LABEL}`], { allowFailure: true, capture: true });
@@ -203,6 +208,9 @@ async function install() {
   console.log(`release ${releaseRoot}`);
   console.log(`config  ${configPath}`);
   console.log(`logs    ${logsRoot}`);
+  if (desktopWasRunning) {
+    console.log("IMPORTANT: quit and reopen Codex Desktop once before sending the first Feishu task so it joins the shared app-server.");
+  }
 }
 
 async function uninstall() {
@@ -247,6 +255,7 @@ function status() {
 }
 
 function restart() {
+  enableDesktopDaemonEnvironment();
   shell(DESKTOP_CODEX_BIN, ["app-server", "daemon", "start"]);
   shell("launchctl", ["kickstart", "-k", `${domain}/${LABEL}`]);
   status();

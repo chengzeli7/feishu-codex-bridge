@@ -16,7 +16,7 @@ A single-user, self-hosted Feishu/Lark remote control console for Codex Desktop.
 - Reply to a task card or use follow-up language to continue the correct task.
 - Inspect the current stage, plan, tools/MCP calls, commands, changed files, errors, and elapsed time.
 - Update an opened detail card in place with a roughly two-second debounce.
-- Share tasks, user messages, replies, and completion state with Codex Desktop.
+- Share tasks, user messages, replies, and completion state with Codex Desktop without retaining a completed task's writer lock.
 - Keep Desktop task synchronization passive by default so background activity
   does not open or take over task windows.
 - Send images, files, and short voice messages.
@@ -275,6 +275,7 @@ The export command creates a ZIP and SHA-256 file without `config.local.json`, `
 ## Known Limitations
 
 - The bridge cannot process messages while the Mac is asleep or powered off.
+- After the first install or an upgrade from an older build, quit and reopen Codex Desktop once so it joins the shared local app-server.
 - A turn actively owned by another Desktop process cannot be steered directly; follow-up messages are queued safely.
 - If the Codex daemon does not implement `thread/items/list`, detailed progress falls back to local pagination over `thread/read`.
 - Automatic card updates stop when the callback token expires; use **Refresh** to fetch a new snapshot.

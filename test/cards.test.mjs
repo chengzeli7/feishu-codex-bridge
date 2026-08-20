@@ -38,6 +38,20 @@ test("builds complete Card 2.0 payloads with callback actions", () => {
   assert.ok(callbacks.some((item) => item.value.action === "create_form"));
 });
 
+test("task list exposes at most the 10 most recent tasks", () => {
+  const threads = Array.from({ length: 12 }, (_, index) => ({
+    ...thread,
+    id: `thread-${index}`,
+    name: `任务 ${index}`
+  }));
+  const card = taskListCard(threads);
+  const taskCallbacks = walk(card)
+    .filter((item) => item.type === "callback" && item.value.action === "progress");
+  assert.equal(taskCallbacks.length, 10);
+  assert.match(JSON.stringify(card), /最近任务 · 最多 10 条/);
+  assert.doesNotMatch(JSON.stringify(card), /任务 10/);
+});
+
 test("form submit buttons use form_action_type without callback behaviors", () => {
   const cards = [
     createTaskFormCard({ app: "/tmp/app" }, "app"),
@@ -126,6 +140,7 @@ test("progress detail card renders plans, activity and pagination controls", () 
   assert.ok(actions.includes("progress"));
   assert.ok(actions.includes("send_form"));
   assert.ok(actions.includes("stop"));
+  assert.ok(actions.includes("home"));
 });
 
 test("health card exposes official daemon recovery state", () => {

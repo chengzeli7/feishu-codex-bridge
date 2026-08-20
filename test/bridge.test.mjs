@@ -13,6 +13,7 @@ class FakeCodex extends EventEmitter {
     this.ready = true;
     this.created = [];
     this.sent = [];
+    this.unsubscribed = [];
     this.readCount = 0;
   }
   async start() { this.ready = true; queueMicrotask(() => this.emit("ready")); }
@@ -47,6 +48,10 @@ class FakeCodex extends EventEmitter {
   async archiveThread() {}
   async unarchiveThread() {}
   async interruptThread() {}
+  async unsubscribeThread(threadId) {
+    this.unsubscribed.push(threadId);
+    return { status: "unsubscribed" };
+  }
   respondError() {}
 }
 
@@ -233,8 +238,10 @@ test("lists tasks and sends a completion card", async () => {
     thread.turns[0].items = [{ id: "answer", type: "agentMessage", text: "完成结果" }];
     codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
     await waitFor(() => lark.replies.length === 3);
+    await waitFor(() => codex.unsubscribed.length === 1);
     assert.equal(lark.replies[2].messageId, "om_progress");
     assert.equal(lark.replies[2].content.header.title.content, "Codex 任务已完成");
+    assert.deepEqual(codex.unsubscribed, [thread.id]);
   } finally {
     await bridge.stop();
     await rm(tempDir, { recursive: true, force: true });
@@ -411,6 +418,44 @@ test("queues a message while the task is active in Codex Desktop", async () => {
     await waitFor(() => lark.replies.length === 2);
     assert.equal(codex.sent.length, 0);
     assert.equal(lark.replies[1].content.header.title.content, "消息已加入队列");
+  } finally {
+    await bridge.stop();
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("keeps the writer while dispatching the next queued turn", async () => {
+  const thread = {
+    id: "019f0000-0000-7000-8000-000000000003",
+    name: "连续任务",
+    cwd: "/tmp/project",
+    status: { type: "active" },
+    turns: [{ id: "turn-current", status: "inProgress", items: [] }]
+  };
+  const { bridge, codex, lark, tempDir } = await makeBridge(thread);
+  try {
+    bridge.state.selectThread("oc_chat", thread.id);
+    lark.emit("event", messageEnvelope({ message_id: "om_queue_next", content: "继续 下一轮要求" }));
+    await waitFor(() => lark.replies.length === 1);
+    assert.equal(bridge.state.queuedFor(thread.id).length, 0);
+
+    bridge.state.enqueue(thread.id, {
+      text: "排队后的下一轮",
+      chatId: "oc_chat",
+      sourceMessageId: "om_queue_source",
+      senderId: "ou_allowed"
+    }, 10);
+    bridge.state.watchThread(thread.id, {
+      chatId: "oc_chat",
+      messageId: "om_queue_source",
+      senderId: "ou_allowed",
+      turnId: "turn-current"
+    });
+    thread.status = { type: "idle" };
+    thread.turns[0].status = "completed";
+    codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
+    await waitFor(() => codex.sent.some((item) => item.text === "排队后的下一轮"));
+    assert.equal(codex.unsubscribed.length, 0);
   } finally {
     await bridge.stop();
     await rm(tempDir, { recursive: true, force: true });

@@ -265,6 +265,10 @@ export class CodexClient extends EventEmitter {
     await this.request("turn/interrupt", { threadId, turnId });
   }
 
+  async unsubscribeThread(threadId) {
+    return this.request("thread/unsubscribe", { threadId });
+  }
+
   async stop() {
     const child = this.child;
     const webSocket = this.webSocket;
