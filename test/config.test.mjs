@@ -14,7 +14,7 @@ test("loads and resolves a valid single-user configuration", async () => {
     assert.equal(config.requireP2P, true);
     assert.equal(config.desktopSyncEnabled, false);
     assert.equal(config.desktopAutoOpenEnabled, false);
-    assert.equal(config.recentThreadLimit, 10);
+    assert.equal(config.recentThreadLimit, 5);
     assert.equal(config.codexAppServerSocket, null);
     assert.equal(config.stateFile, path.join(directory, "data/state.json"));
     assert.equal(config.workspaces.app, "/tmp/app");
@@ -23,16 +23,16 @@ test("loads and resolves a valid single-user configuration", async () => {
   }
 });
 
-test("rejects task list limits above the 10-item card maximum", async () => {
+test("rejects task list limits above the five-item card maximum", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "bridge-config-"));
   const file = path.join(directory, "config.json");
   try {
     await writeFile(file, JSON.stringify({
       allowedUserIds: ["ou_test"],
       workspaces: { app: "/tmp/app" },
-      recentThreadLimit: 11
+      recentThreadLimit: 6
     }));
-    await assert.rejects(loadConfig(file), /between 1 and 10/);
+    await assert.rejects(loadConfig(file), /between 1 and 5/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

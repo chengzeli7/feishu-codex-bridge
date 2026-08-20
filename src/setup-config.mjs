@@ -76,7 +76,7 @@ export function buildBridgeConfig({
     workspaces,
     workspaceAliases,
     defaultWorkspace,
-    recentThreadLimit: 10,
+    recentThreadLimit: 5,
     pollIntervalMs: 15_000,
     maxQueuedMessagesPerThread: 10,
     maxOfflineOperations: 50,

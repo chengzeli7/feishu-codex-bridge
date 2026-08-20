@@ -139,8 +139,8 @@ async function install() {
       changed = true;
     }
   }
-  if (installedConfig.recentThreadLimit === undefined || installedConfig.recentThreadLimit === 5 || installedConfig.recentThreadLimit > 10) {
-    installedConfig.recentThreadLimit = 10;
+  if (installedConfig.recentThreadLimit === undefined || installedConfig.recentThreadLimit > 5) {
+    installedConfig.recentThreadLimit = 5;
     changed = true;
   }
   for (const [alias, workspace] of Object.entries(installedConfig.workspaces ?? {})) {

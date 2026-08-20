@@ -97,7 +97,7 @@ function metricColumn(value, label, color = "blue") {
   };
 }
 
-function buttonColumn(text, action, extra, { primary = false, danger = false, disabled = false, confirm } = {}) {
+function buttonColumn(text, action, extra, { primary = false, danger = false, confirm } = {}) {
   return {
     tag: "column",
     width: "weighted",
@@ -108,7 +108,6 @@ function buttonColumn(text, action, extra, { primary = false, danger = false, di
       type: danger ? "danger" : primary ? "primary_filled" : "default",
       width: "fill",
       behaviors: callback(action, extra),
-      ...(disabled ? { disabled: true } : {}),
       ...(confirm ? { confirm: { title: plain(confirm.title), text: plain(confirm.text) } } : {})
     }]
   };
@@ -116,16 +115,6 @@ function buttonColumn(text, action, extra, { primary = false, danger = false, di
 
 function actionRow(columns) {
   return { tag: "column_set", flex_mode: "none", horizontal_spacing: "8px", columns };
-}
-
-function pageIndicatorColumn(page, pageCount) {
-  return {
-    tag: "column",
-    width: "weighted",
-    weight: 1,
-    vertical_align: "center",
-    elements: [{ tag: "markdown", content: `**${page + 1} / ${pageCount}**`, text_align: "center", text_size: "caption" }]
-  };
 }
 
 function taskBlock(thread, index, focusedThreadId = null) {
@@ -149,28 +138,14 @@ function taskBlock(thread, index, focusedThreadId = null) {
   };
 }
 
-export function taskListCard(threads, { queuedCount = 0, filter = null, focusedThreadId = null, page = 0 } = {}) {
+export function taskListCard(threads, { queuedCount = 0, filter = null, focusedThreadId = null } = {}) {
   const activeCount = threads.filter((thread) => effectiveStatus(thread).label.includes("运行")).length;
   const completedCount = threads.filter((thread) => effectiveStatus(thread).label === "已完成").length;
   const visible = filter === "active" ? threads.filter((thread) => effectiveStatus(thread).label.includes("运行")) :
     filter === "completed" ? threads.filter((thread) => effectiveStatus(thread).label === "已完成") : threads;
-  const limited = visible.slice(0, 10);
-  const pageSize = 3;
-  const pageCount = Math.max(1, Math.ceil(limited.length / pageSize));
-  const requestedPage = Number.isInteger(page) ? page : 0;
-  const currentPage = Math.min(Math.max(requestedPage, 0), pageCount - 1);
-  const offset = currentPage * pageSize;
-  const taskElements = limited.length > 0 ? limited.slice(offset, offset + pageSize).map((thread, index) => taskBlock(thread, offset + index, focusedThreadId)) : [
+  const taskElements = visible.length > 0 ? visible.slice(0, 5).map((thread, index) => taskBlock(thread, index, focusedThreadId)) : [
     { tag: "markdown", content: "<font color='grey'>当前没有符合条件的任务。</font>" }
   ];
-  const rangeStart = limited.length > 0 ? offset + 1 : 0;
-  const rangeEnd = Math.min(offset + pageSize, limited.length);
-  const listTitle = filter === "active" ? "正在运行" : filter === "completed" ? "最近完成" : "最近任务";
-  const pager = pageCount > 1 ? actionRow([
-    buttonColumn("上一页", "home", { filter, page: currentPage - 1 }, { disabled: currentPage === 0 }),
-    pageIndicatorColumn(currentPage, pageCount),
-    buttonColumn("下一页", "home", { filter, page: currentPage + 1 }, { primary: currentPage < pageCount - 1, disabled: currentPage === pageCount - 1 })
-  ]) : null;
   return baseCard({
     title: "Codex 任务",
     subtitle: `个人远程控制台 · ${timeLabel(Date.now())}`,
@@ -189,12 +164,11 @@ export function taskListCard(threads, { queuedCount = 0, filter = null, focusedT
         border: { color: "grey-100", corner_radius: "8px" },
         padding: "8px",
         vertical_spacing: "8px",
-        header: { title: plain(`${listTitle} · ${rangeStart}–${rangeEnd} / ${limited.length}`) },
+        header: { title: plain(filter === "active" ? "正在运行" : filter === "completed" ? "最近完成" : "最近任务") },
         elements: taskElements
       },
-      ...(pager ? [pager] : []),
       actionRow([
-        buttonColumn("刷新", "home", { filter, page: currentPage }, { primary: true }),
+        buttonColumn("刷新", "home", {}, { primary: true }),
         buttonColumn("新建任务", "create_form", {})
       ]),
       actionRow([
