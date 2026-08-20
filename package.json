@@ -22,6 +22,7 @@
     "smoke:codex": "node scripts/smoke-codex.mjs",
     "smoke:create": "node scripts/smoke-create.mjs",
     "validate:cards": "node scripts/validate-cards.mjs",
+    "validate:cards:live": "node scripts/validate-cards.mjs --live",
     "doctor": "node scripts/doctor.mjs",
     "setup": "node scripts/setup.mjs",
     "export:bundle": "node scripts/export-bundle.mjs",

@@ -16,6 +16,10 @@ npm test
 npm run validate:cards
 ```
 
+`npm run validate:cards` is self-contained and safe for CI. Maintainers with a
+configured Feishu app can additionally run `npm run validate:cards:live` to
+validate every sample through `lark-cli --dry-run`.
+
 The unit tests must not require a real Feishu app, Codex account, or user configuration. Keep live smoke tests opt-in.
 
 ## Pull requests
