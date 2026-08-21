@@ -101,8 +101,22 @@ test("progress card exposes back, continue and stop controls without rename", ()
   assert.ok(actions.includes("home"));
   assert.ok(actions.includes("progress_detail"));
   assert.ok(actions.includes("send_form"));
+  assert.ok(actions.includes("watch"));
   assert.ok(actions.includes("stop"));
   assert.equal(actions.includes("rename_form"), false);
+
+  const completedThread = {
+    ...thread,
+    status: { type: "completed" },
+    turns: [{ id: "turn", status: "completed", items: [] }]
+  };
+  const completedActions = walk(progressCard(completedThread, { watching: true }))
+    .filter((item) => item.type === "callback")
+    .map((item) => item.value.action);
+  assert.ok(completedActions.includes("home"));
+  assert.ok(completedActions.includes("archive"));
+  assert.equal(completedActions.includes("watch"), false);
+  assert.equal(completedActions.includes("unwatch"), false);
 });
 
 test("progress detail card renders plans, activity and pagination controls", () => {

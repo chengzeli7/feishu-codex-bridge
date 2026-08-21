@@ -220,15 +220,17 @@ export function progressCard(thread, { watching = false, queue = [] } = {}) {
   const progress = thread.rollout?.progress || thread.rollout?.result || latestAgentMessage(thread) || "尚未产生可展示的进展。";
   const project = thread.cwd ? path.basename(thread.cwd) : "未知";
   const active = status.label.includes("运行");
+  const completed = status.label === "已完成";
   const buttons = [
     buttonColumn("刷新", "progress", { threadId: thread.id }, { primary: true }),
     buttonColumn("详细进展", "progress_detail", { threadId: thread.id }),
     buttonColumn("继续任务", "send_form", { threadId: thread.id })
   ];
-  const managementButtons = [
-    buttonColumn(watching ? "取消关注" : "关注完成", watching ? "unwatch" : "watch", { threadId: thread.id }),
-    buttonColumn("返回任务列表", "home", {})
-  ];
+  const managementButtons = [];
+  if (!completed) managementButtons.push(
+    buttonColumn(watching ? "取消关注" : "关注完成", watching ? "unwatch" : "watch", { threadId: thread.id })
+  );
+  managementButtons.push(buttonColumn("返回任务列表", "home", {}));
   if (active) managementButtons.push(buttonColumn("停止", "stop", { threadId: thread.id }, {
       danger: true,
       confirm: { title: "停止当前回合？", text: "已经产生的文件修改不会自动撤销。" }
