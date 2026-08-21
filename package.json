@@ -1,6 +1,6 @@
 {
   "name": "feishu-codex-bridge",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Self-hosted Feishu/Lark remote control bridge for Codex Desktop",
   "private": true,
   "license": "Apache-2.0",

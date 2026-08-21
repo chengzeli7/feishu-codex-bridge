@@ -398,6 +398,32 @@ test("continues a newly created active task with the stored turn id", async () =
   }
 });
 
+test("acknowledges a continuation persisted in the Codex writer queue", async () => {
+  const thread = {
+    id: "019f0000-0000-7000-8000-000000000004",
+    name: "已停止任务",
+    cwd: "/tmp/project",
+    status: { type: "notLoaded" },
+    turns: [{ id: "turn-stopped", status: "interrupted", items: [] }]
+  };
+  const { bridge, codex, lark, tempDir } = await makeBridge(thread);
+  codex.sendMessage = async (threadId, text, selectedThread, options) => {
+    codex.sent.push({ threadId, text, thread: selectedThread, options });
+    return { id: null, status: "queued", items: [], queuedViaWriter: true, queuedSubmissionId: "queued-1" };
+  };
+  try {
+    bridge.state.selectThread("oc_chat", thread.id);
+    lark.emit("event", messageEnvelope({ message_id: "om_writer_queue", content: "继续 修复剩余问题" }));
+    await waitFor(() => lark.replies.length === 1);
+    assert.equal(codex.sent.length, 1);
+    assert.equal(lark.replies[0].content.header.title.content, "消息已交给 Codex");
+    assert.equal(bridge.state.isWatching(thread.id), false);
+  } finally {
+    await bridge.stop();
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
 test("queues a message while the task is active in Codex Desktop", async () => {
   const thread = {
     id: "019f0000-0000-7000-8000-000000000002",

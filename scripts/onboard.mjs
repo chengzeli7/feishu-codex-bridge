@@ -72,7 +72,7 @@ async function createFeishuApp() {
 }
 
 async function main() {
-  if (process.platform !== "darwin") throw new Error("v0.1.1 guided installation currently supports macOS only");
+  if (process.platform !== "darwin") throw new Error("v0.1.2 guided installation currently supports macOS only");
   await mkdir(supportRoot, { recursive: true, mode: 0o700 });
 
   heading(1, "Check prerequisites");

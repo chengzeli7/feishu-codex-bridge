@@ -4,6 +4,13 @@ All notable public changes are documented here. This project follows [Semantic V
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-21
+
+- Automatically restores archived Codex tasks before continuing them from Feishu.
+- Routes stopped or failed task continuations through Codex's native writer queue when Codex Desktop still owns the task, preserving the original task context without forcing a competing writer.
+- Acknowledges continuations that remain in the native queue without reporting a false completion watch.
+- Simplified the task home card by removing the top metrics and hid the completion-follow action for tasks that have already finished.
+
 ## [0.1.1] - 2026-08-20
 
 - Fixed Codex Desktop task ownership conflicts by sharing the official local
@@ -38,6 +45,7 @@ First public beta.
 - Added secret redaction and filtering of raw reasoning, full tool arguments, and full terminal output.
 - Added an interactive setup flow, sanitized offline bundle export, macOS LaunchAgent installer, tests, and Card 2.0 validation.
 
-[Unreleased]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/chengzeli7/feishu-codex-bridge/releases/tag/v0.1.0

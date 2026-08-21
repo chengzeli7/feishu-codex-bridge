@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { randomUUID } from "node:crypto";
 import { spawn as nodeSpawn } from "node:child_process";
 import net from "node:net";
 import { createInterface } from "node:readline";
@@ -9,6 +10,18 @@ const THREAD_STORE_RETRY_DELAYS_MS = [50, 100, 200, 400, 800];
 
 function isTransientThreadStoreError(error) {
   return /rollout.*is empty|failed to read (?:canonical )?session metadata/i.test(error?.message ?? "");
+}
+
+function isArchivedThreadError(error) {
+  return /(?:session|thread) .* is archived/i.test(error?.message ?? "");
+}
+
+function isActiveWriterError(error) {
+  return /already has an active writer/i.test(error?.message ?? "");
+}
+
+function isQueueStartRace(error) {
+  return /already has an active or pending turn|already has an active writer|queued submission not found/i.test(error?.message ?? "");
 }
 
 function createUnixWebSocket(socketPath) {
@@ -39,7 +52,7 @@ export class CodexClient extends EventEmitter {
       if (this.socketPath) await this.#startWebSocket();
       else this.#startStdio();
       await this.request("initialize", {
-        clientInfo: { name: "feishu-codex-bridge", version: "0.1.1" },
+        clientInfo: { name: "feishu-codex-bridge", version: "0.1.2" },
         capabilities: { experimentalApi: true }
       });
       this.notify("initialized");
@@ -214,11 +227,15 @@ export class CodexClient extends EventEmitter {
   } = {}) {
     let activeThread = thread;
     if (!activeThread || activeThread.status?.type === "notLoaded") {
-      const resumed = await this.request("thread/resume", {
-        threadId,
-        approvalPolicy: "never"
-      });
-      activeThread = resumed.thread;
+      try {
+        activeThread = await this.#resumeThreadForInput(threadId);
+      } catch (error) {
+        if (!isActiveWriterError(error)) throw error;
+        return this.#queueMessageThroughWriter(threadId, text, thread, {
+          clientUserMessageId,
+          attachments
+        });
+      }
     }
 
     if (activeThread.status?.type === "active" && !activeThread.turns?.some((turn) => turn.status === "inProgress")) {
@@ -236,17 +253,75 @@ export class CodexClient extends EventEmitter {
       return { id: result.turnId, status: "inProgress", items: [], steered: true };
     }
 
-    const result = await this.request("turn/start", {
+    try {
+      const result = await this.request("turn/start", {
+        threadId,
+        input: userInput(text, attachments),
+        approvalPolicy: "never",
+        ...(activeThread.cwd ? {
+          cwd: activeThread.cwd,
+          runtimeWorkspaceRoots: workspaceRoots(activeThread.cwd, attachments)
+        } : {}),
+        ...(clientUserMessageId ? { clientUserMessageId } : {})
+      });
+      return result.turn;
+    } catch (error) {
+      if (!isActiveWriterError(error)) throw error;
+      return this.#queueMessageThroughWriter(threadId, text, activeThread, {
+        clientUserMessageId,
+        attachments
+      });
+    }
+  }
+
+  async #resumeThreadForInput(threadId) {
+    const resume = () => this.request("thread/resume", {
+      threadId,
+      approvalPolicy: "never"
+    });
+    try {
+      return (await resume()).thread;
+    } catch (error) {
+      if (!isArchivedThreadError(error)) throw error;
+      await this.unarchiveThread(threadId);
+      return (await resume()).thread;
+    }
+  }
+
+  async #queueMessageThroughWriter(threadId, text, thread, {
+    clientUserMessageId,
+    attachments
+  }) {
+    const previousTurnId = latestTurn(thread)?.id ?? null;
+    const queued = await this.request("thread/queue/add", {
       threadId,
       input: userInput(text, attachments),
-      approvalPolicy: "never",
-      ...(activeThread.cwd ? {
-        cwd: activeThread.cwd,
-        runtimeWorkspaceRoots: workspaceRoots(activeThread.cwd, attachments)
-      } : {}),
-      ...(clientUserMessageId ? { clientUserMessageId } : {})
+      clientUserMessageId: clientUserMessageId ?? randomUUID()
     });
-    return result.turn;
+    const queuedSubmissionId = queued.queuedSubmission.id;
+    try {
+      const started = await this.request("thread/queue/start", {
+        threadId,
+        queuedSubmissionId
+      });
+      return { ...started.turn, queuedViaWriter: true };
+    } catch (error) {
+      if (!isQueueStartRace(error)) throw error;
+    }
+
+    for (const retryDelay of [0, ...THREAD_STORE_RETRY_DELAYS_MS]) {
+      if (retryDelay) await delay(retryDelay);
+      const refreshed = await this.readThread(threadId);
+      const nextTurn = refreshed.turns?.findLast((turn) => turn.id !== previousTurnId);
+      if (nextTurn) return { ...nextTurn, queuedViaWriter: true };
+    }
+    return {
+      id: null,
+      status: "queued",
+      items: [],
+      queuedViaWriter: true,
+      queuedSubmissionId
+    };
   }
 
   async renameThread(threadId, name) {
@@ -258,7 +333,8 @@ export class CodexClient extends EventEmitter {
   }
 
   async unarchiveThread(threadId) {
-    await this.request("thread/unarchive", { threadId });
+    const result = await this.request("thread/unarchive", { threadId });
+    return result.thread;
   }
 
   async interruptThread(threadId, turnId) {

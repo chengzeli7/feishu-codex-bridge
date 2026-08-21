@@ -9,7 +9,7 @@ import { enableDesktopDaemonEnvironment } from "../src/desktop-daemon-env.mjs";
 
 const LABEL = "io.github.chengzeli7.feishu-codex-bridge";
 const LEGACY_LABELS = ["com.chengze.codex-feishu-bridge", "com.chengze.codex-feishu-app-server"];
-const VERSION = "0.1.1";
+const VERSION = "0.1.2";
 const DESKTOP_CODEX_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const userHome = os.homedir();
