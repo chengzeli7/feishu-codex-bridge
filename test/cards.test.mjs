@@ -30,12 +30,18 @@ function walk(value, result = []) {
 }
 
 test("builds complete Card 2.0 payloads with callback actions", () => {
-  const home = taskListCard([thread]);
+  const home = taskListCard([thread], { queuedCount: 3 });
   assert.equal(home.schema, "2.0");
   assert.equal(home.config.width_mode, "default");
   const callbacks = walk(home).filter((item) => item.type === "callback");
   assert.ok(callbacks.some((item) => item.value.action === "progress"));
   assert.ok(callbacks.some((item) => item.value.action === "create_form"));
+  assert.ok(callbacks.some((item) => item.value.action === "home" && item.value.filter === "active"));
+  assert.ok(callbacks.some((item) => item.value.action === "home" && item.value.filter === "completed"));
+  assert.ok(callbacks.some((item) => item.value.action === "queue"));
+  const metricHeadings = walk(home).filter((item) => item.tag === "markdown" && item.content?.startsWith("## <font"));
+  assert.equal(metricHeadings.length, 0);
+  assert.doesNotMatch(JSON.stringify(home), /排队消息/);
 });
 
 test("task list exposes at most the five most recent tasks without pagination", () => {

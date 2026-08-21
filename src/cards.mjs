@@ -138,9 +138,8 @@ function taskBlock(thread, index, focusedThreadId = null) {
   };
 }
 
-export function taskListCard(threads, { queuedCount = 0, filter = null, focusedThreadId = null } = {}) {
+export function taskListCard(threads, { filter = null, focusedThreadId = null } = {}) {
   const activeCount = threads.filter((thread) => effectiveStatus(thread).label.includes("运行")).length;
-  const completedCount = threads.filter((thread) => effectiveStatus(thread).label === "已完成").length;
   const visible = filter === "active" ? threads.filter((thread) => effectiveStatus(thread).label.includes("运行")) :
     filter === "completed" ? threads.filter((thread) => effectiveStatus(thread).label === "已完成") : threads;
   const taskElements = visible.length > 0 ? visible.slice(0, 5).map((thread, index) => taskBlock(thread, index, focusedThreadId)) : [
@@ -151,12 +150,6 @@ export function taskListCard(threads, { queuedCount = 0, filter = null, focusedT
     subtitle: `个人远程控制台 · ${timeLabel(Date.now())}`,
     tag: { text: filter === "active" ? "进行中" : filter === "completed" ? "已完成" : "首页", color: "blue" },
     elements: [
-      {
-        tag: "column_set",
-        flex_mode: "none",
-        horizontal_spacing: "8px",
-        columns: [metricColumn(activeCount, "运行中"), metricColumn(completedCount, "已完成", "green"), metricColumn(queuedCount, "排队消息", "violet")]
-      },
       {
         tag: "collapsible_panel",
         expanded: true,
