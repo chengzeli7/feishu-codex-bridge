@@ -531,7 +531,7 @@ export function noticeCard({ title, message, template = "blue", status = "提示
 export function helpCard() {
   return baseCard({
     title: "Codex 飞书助手",
-    subtitle: "个人远程控制台 · v0.1.2",
+    subtitle: "个人远程控制台 · v0.1.3",
     tag: { text: "使用帮助", color: "blue" },
     elements: [
       { tag: "column_set", flex_mode: "none", columns: [{ tag: "column", width: "weighted", weight: 1, background_style: "blue-50", padding: "12px", vertical_spacing: "4px", elements: [{ tag: "markdown", content: "**直接说要做什么即可**\n例如：`帮我查最近一个 PR 是谁的`。助手会自动新建任务；回复某张任务卡会继续对应任务。" }] }] },

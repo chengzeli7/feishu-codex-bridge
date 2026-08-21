@@ -4,13 +4,13 @@
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.2-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.3-orange.svg)](CHANGELOG.md)
 
 一个运行在个人 Mac 上的单用户、自托管飞书 Codex 远程控制台。
 
 Self-hosted Feishu/Lark remote control bridge for Codex Desktop. Create and continue Codex tasks, inspect live progress, and receive completion notifications from Feishu while all execution remains on your own Mac.
 
-> `v0.1.2` 是当前公开 Beta。项目依赖 Codex Desktop 当前提供的本地 app-server 能力，Codex 更新后可能需要同步适配。
+> `v0.1.3` 是当前公开 Beta。项目依赖 Codex Desktop 当前提供的本地 app-server 能力，Codex 更新后可能需要同步适配。
 
 ## 能做什么
 
@@ -19,6 +19,7 @@ Self-hosted Feishu/Lark remote control bridge for Codex Desktop. Create and cont
 - 在飞书查看当前阶段、执行计划、工具/MCP、命令、修改文件、错误和耗时。
 - 打开详细进展后，以约 2 秒防抖更新同一张卡片。
 - 在 Codex Desktop 和飞书之间共享任务、用户消息、回复与完成状态，并在任务结束后释放会话写锁。
+- 当其他 Codex Desktop 进程持有任务时，将后续消息保存在本地持久化队列，待写锁释放后只发送一次。
 - Desktop 任务同步默认不自动打开或接管窗口，避免后台任务造成跨窗口冲突。
 - 支持图片、文件、短语音、任务排队、断线恢复和完成通知。
 - 支持一次性、每日和每周本地定时任务。

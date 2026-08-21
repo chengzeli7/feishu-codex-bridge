@@ -4,6 +4,11 @@ All notable public changes are documented here. This project follows [Semantic V
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-08-21
+
+- Fixed false failure cards when another Codex Desktop process owns an unloaded task.
+- Keeps affected continuations in the bridge's durable queue and removes them only after Codex accepts the new turn, preventing lost or duplicate messages.
+
 ## [0.1.2] - 2026-08-21
 
 - Automatically restores archived Codex tasks before continuing them from Feishu.
@@ -45,7 +50,8 @@ First public beta.
 - Added secret redaction and filtering of raw reasoning, full tool arguments, and full terminal output.
 - Added an interactive setup flow, sanitized offline bundle export, macOS LaunchAgent installer, tests, and Card 2.0 validation.
 
-[Unreleased]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/chengzeli7/feishu-codex-bridge/releases/tag/v0.1.0

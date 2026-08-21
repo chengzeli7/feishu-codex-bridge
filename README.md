@@ -4,11 +4,11 @@
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.2-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.3-orange.svg)](CHANGELOG.md)
 
 A single-user, self-hosted Feishu/Lark remote control console for Codex Desktop. Create and continue Codex tasks, inspect live progress, and receive completion notifications from Feishu while all execution stays on your own Mac.
 
-> `v0.1.2` is the current public beta. This project integrates with the local app-server capabilities currently shipped with Codex Desktop, so a future Codex update may require compatibility changes.
+> `v0.1.3` is the current public beta. This project integrates with the local app-server capabilities currently shipped with Codex Desktop, so a future Codex update may require compatibility changes.
 
 ## Features
 
@@ -17,6 +17,7 @@ A single-user, self-hosted Feishu/Lark remote control console for Codex Desktop.
 - Inspect the current stage, plan, tools/MCP calls, commands, changed files, errors, and elapsed time.
 - Update an opened detail card in place with a roughly two-second debounce.
 - Share tasks, user messages, replies, and completion state with Codex Desktop without retaining a completed task's writer lock.
+- Keep continuations in a durable local queue while another Codex Desktop process owns the task, then send them once after the writer is released.
 - Keep Desktop task synchronization passive by default so background activity
   does not open or take over task windows.
 - Send images, files, and short voice messages.

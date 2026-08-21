@@ -32,7 +32,7 @@ test("connects to the shared Desktop app-server over a Unix WebSocket", async ()
     await client.start();
     assert.equal(client.ready, true);
     assert.equal(sent[0].method, "initialize");
-    assert.equal(sent[0].params.clientInfo.version, "0.1.2");
+    assert.equal(sent[0].params.clientInfo.version, "0.1.3");
     assert.equal(sent[1].method, "initialized");
   } finally {
     await client.stop();
@@ -193,7 +193,7 @@ test("unarchives a closed task before starting its next turn", async () => {
   }
 });
 
-test("continues an interrupted task through the owning writer queue", async () => {
+test("does not duplicate a continuation when another process owns the writer", async () => {
   const requests = [];
   const child = new EventEmitter();
   child.stdin = new PassThrough();
@@ -209,89 +209,21 @@ test("continues an interrupted task through the owning writer queue", async () =
       if (request.method === "thread/resume") {
         response = { id: request.id, error: { message: "thread thread-1 already has an active writer" } };
       }
-      if (request.method === "thread/queue/add") {
-        response = {
-          id: request.id,
-          result: { queuedSubmission: { id: "queued-1", input: request.params.input, clientUserMessageId: request.params.clientUserMessageId } }
-        };
-      }
-      if (request.method === "thread/queue/start") {
-        response = { id: request.id, result: { turn: { id: "turn-owner", status: "inProgress", items: [] } } };
-      }
       queueMicrotask(() => child.stdout.write(`${JSON.stringify(response)}\n`));
     }
   });
   const client = new CodexClient({ spawn: () => child, bin: "/bin/codex" });
   try {
     await client.start();
-    const turn = await client.sendMessage("thread-1", "停止后继续", {
+    await assert.rejects(client.sendMessage("thread-1", "停止后继续", {
       id: "thread-1",
       status: { type: "notLoaded" },
       turns: [{ id: "turn-stopped", status: "interrupted", items: [] }]
-    }, { clientUserMessageId: "om_continue" });
-    assert.equal(turn.id, "turn-owner");
-    assert.equal(turn.queuedViaWriter, true);
+    }, { clientUserMessageId: "om_continue" }), /already has an active writer/);
     assert.deepEqual(requests.map((item) => item.method), [
       "initialize",
-      "thread/resume",
-      "thread/queue/add",
-      "thread/queue/start"
+      "thread/resume"
     ]);
-    const queued = requests.find((item) => item.method === "thread/queue/add");
-    assert.equal(queued.params.clientUserMessageId, "om_continue");
-  } finally {
-    await client.stop();
-  }
-});
-
-test("recognizes a queued continuation that auto-starts before the explicit start request", async () => {
-  const child = new EventEmitter();
-  child.stdin = new PassThrough();
-  child.stdout = new PassThrough();
-  child.stderr = new PassThrough();
-  child.kill = () => true;
-  child.stdin.on("data", (chunk) => {
-    for (const line of chunk.toString().trim().split("\n")) {
-      const request = JSON.parse(line);
-      if (!Object.hasOwn(request, "id")) continue;
-      let response = { id: request.id, result: {} };
-      if (request.method === "thread/resume") {
-        response = { id: request.id, error: { message: "thread thread-1 already has an active writer" } };
-      }
-      if (request.method === "thread/queue/add") {
-        response = { id: request.id, result: { queuedSubmission: { id: "queued-1" } } };
-      }
-      if (request.method === "thread/queue/start") {
-        response = { id: request.id, error: { message: "thread already has an active or pending turn" } };
-      }
-      if (request.method === "thread/read") {
-        response = {
-          id: request.id,
-          result: {
-            thread: {
-              id: "thread-1",
-              status: { type: "active" },
-              turns: [
-                { id: "turn-stopped", status: "interrupted", items: [] },
-                { id: "turn-auto-started", status: "inProgress", items: [] }
-              ]
-            }
-          }
-        };
-      }
-      queueMicrotask(() => child.stdout.write(`${JSON.stringify(response)}\n`));
-    }
-  });
-  const client = new CodexClient({ spawn: () => child, bin: "/bin/codex" });
-  try {
-    await client.start();
-    const turn = await client.sendMessage("thread-1", "自动开始", {
-      id: "thread-1",
-      status: { type: "notLoaded" },
-      turns: [{ id: "turn-stopped", status: "interrupted", items: [] }]
-    });
-    assert.equal(turn.id, "turn-auto-started");
-    assert.equal(turn.queuedViaWriter, true);
   } finally {
     await client.stop();
   }

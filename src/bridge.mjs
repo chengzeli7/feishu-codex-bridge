@@ -32,7 +32,7 @@ import { DesktopSync } from "./desktop-sync.mjs";
 import { CodexDaemonManager } from "./codex-daemon.mjs";
 import { enableDesktopDaemonEnvironment } from "./desktop-daemon-env.mjs";
 
-const VERSION = "0.1.2";
+const VERSION = "0.1.3";
 const EVENT_KEYS = ["im.message.receive_v1", "card.action.trigger"];
 const DETAIL_ITEM_PAGE_SIZE = 24;
 const MUTATING_ACTIONS = new Set([
@@ -534,20 +534,13 @@ export class Bridge {
       if (/同步当前回合|找不到.*回合|current turn|expectedTurnId/i.test(error.message)) {
         return this.#queueThreadMessage(threadId, thread, command.message, event, attachments, "当前回合刚发生切换");
       }
+      if (/already has an active writer/i.test(error.message)) {
+        return this.#queueThreadMessage(threadId, thread, command.message, event, attachments, "这个任务当前由 Codex Desktop 持有");
+      }
       throw error;
     }
     this.state.selectThread(event.chat_id, threadId);
     this.state.bindMessage(event.message_id, { threadId, chatId: event.chat_id, kind: "task-message" });
-    if (turn.queuedViaWriter && turn.status === "queued") {
-      await this.state.save();
-      return card(noticeCard({
-        title: "消息已交给 Codex",
-        message: `任务：${threadTitle(thread)}\nCodex Desktop 仍持有这个任务，消息已写入任务的原生队列，将在任务可继续时自动执行。`,
-        template: "yellow",
-        status: "等待接管",
-        action: { text: "查看进度", action: "progress", value: { threadId } }
-      }), { threadId });
-    }
     this.#watchThread({ ...thread, status: { type: "active" } }, event, turn.id);
     await this.state.save();
     await this.#syncDesktopThread(threadId);

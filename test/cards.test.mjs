@@ -168,7 +168,7 @@ test("progress detail card renders plans, activity and pagination controls", () 
 
 test("health card exposes official daemon recovery state", () => {
   const card = healthCard({
-    version: "0.1.2",
+    version: "0.1.3",
     uptime: "1分钟",
     codexReady: false,
     larkReady: true,
