@@ -1,65 +1,79 @@
 # Feishu Codex Bridge
 
-**English** | [简体中文](README.zh-CN.md)
+<div align="center">
+
+**Run Codex from Feishu. Keep execution on your Mac.**
+
+A single-user, self-hosted companion for starting, monitoring, and continuing
+Codex Desktop tasks from a Feishu or Lark private chat.
+
+[Get started](docs/INSTALL.md) · [See how it works](docs/ARCHITECTURE.md) · [Usage guide](docs/USAGE.md) · [简体中文](README.zh-CN.md)
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.3-orange.svg)](CHANGELOG.md)
 
-A single-user, self-hosted Feishu/Lark remote control console for Codex Desktop. Create and continue Codex tasks, inspect live progress, and receive completion notifications from Feishu while all execution stays on your own Mac.
+</div>
 
-> `v0.1.3` is the current public beta. This project integrates with the local app-server capabilities currently shipped with Codex Desktop, so a future Codex update may require compatibility changes.
+![Feishu Codex Bridge connects a private chat to Codex Desktop running on your Mac](docs/images/hero.png)
 
-## Features
+> **Public beta:** `v0.1.3` uses local app-server capabilities currently bundled
+> with Codex Desktop. A future Codex update may require a compatibility update.
 
-- Create Codex tasks by sending normal messages—commands are optional.
-- Reply to a task card or use follow-up language to continue the correct task, including tasks closed or stopped in Codex Desktop.
-- Inspect the current stage, plan, tools/MCP calls, commands, changed files, errors, and elapsed time.
-- Update an opened detail card in place with a roughly two-second debounce.
-- Share tasks, user messages, replies, and completion state with Codex Desktop without retaining a completed task's writer lock.
-- Keep continuations in a durable local queue while another Codex Desktop process owns the task, then send them once after the writer is released.
-- Keep Desktop task synchronization passive by default so background activity
-  does not open or take over task windows.
-- Send images, files, and short voice messages.
-- Queue messages safely, recover from disconnects, and send completion notifications.
-- Create one-time, daily, and weekly schedules that run locally.
-- Restrict access with user, private-chat, and workspace allowlists.
+## What problem does it solve?
 
-This is not remote desktop software. It does not provide screen viewing, mouse or keyboard control, or a way to bypass Codex and macOS permissions.
+Codex Desktop works on your Mac, but you are not always sitting in front of it.
+Feishu Codex Bridge turns a private bot chat into a lightweight task console:
 
-## Architecture
+1. Send a normal message from Feishu to start a Codex task.
+2. Follow plans, commands, files, errors, and elapsed time in a task card.
+3. Reply to the card to continue the same task with its existing context.
+4. Receive a notification when the task finishes or needs you.
 
-```text
-Feishu private chat
-        │ message / Card 2.0 callback
-        ▼
-Feishu Codex Bridge ── local state / queue / scheduler
-        │ Unix WebSocket
-        ▼
-Codex Desktop app-server daemon
-        │
-        ▼
-Allowlisted local workspaces
-```
+Your repository, Codex session, credentials, and execution state remain on the Mac.
 
-Feishu transports instructions and renders status. Codex tasks, project files, credentials, and runtime state remain on the user's Mac.
+## 20-second product tour
 
-## Supported Environment
+![Product demo showing task creation, structured progress, completion, and continuation](docs/images/product-demo.gif)
 
-- macOS
-- One allowlisted Feishu user
-- Private bot chat
-- The Codex runtime bundled with ChatGPT Desktop
-- Node.js 20 or later
-- Feishu `lark-cli`
+This is a reconstructed product demo with representative data—not a screenshot
+of a real user or repository. Open the full-size frames:
+[start a task](docs/images/demo-step-1.png) ·
+[follow progress](docs/images/demo-step-2.png) ·
+[get the result and continue](docs/images/demo-step-3.png).
 
-Linux, Windows, group chats, multiple users, and cloud routing are not supported yet.
+## The three everyday workflows
 
-## Quick Start
+| Start work remotely | Stay in the loop | Continue with context |
+|---|---|---|
+| Send a normal request or choose an allowlisted workspace. | Open the task list or detailed progress card without opening Codex Desktop. | Reply to a task card, or use an exact command when task selection must be deterministic. |
+| `Check why the latest tests failed` | Plan · tools/MCP · commands · changed files · errors | `继续1 Add a regression test` |
+
+The bridge also supports images, files, short voice messages, durable follow-up
+queues, completion watches, and one-time, daily, or weekly local schedules.
+
+## Is it for you?
+
+| A good fit when you… | Choose something else when you… |
+|---|---|
+| use Codex Desktop regularly on a personal Mac | need Linux, Windows, or an always-on cloud runner |
+| want to check or continue tasks from your phone | need full screen, mouse, or keyboard control |
+| want code and credentials to stay local | need a shared multi-user or group-chat bot |
+| are comfortable allowlisting specific projects | need unrestricted filesystem access |
+
+## How it works
+
+![Feishu private chat sends requests through a local bridge to Codex Desktop and allowlisted workspaces](docs/images/workflow-en.svg)
+
+Feishu transports messages and renders cards. The bridge, queue, scheduler, Codex
+runtime, and project files all run locally on your Mac. Read the
+[architecture overview](docs/ARCHITECTURE.md) for task ownership and recovery details.
+
+## Quick start
 
 ### Easiest: ask Codex to install it
 
-Open Codex on the target Mac, start a new task, and send this entire prompt:
+Open a new Codex task on the target Mac and send this entire prompt:
 
 ```text
 Install and configure Feishu Codex Bridge on this Mac by following:
@@ -68,224 +82,148 @@ Read the guide and then execute it autonomously. Pause only when the guide says
 that I must complete a browser, Feishu, macOS, or pairing action.
 ```
 
-This path does not require the user to install or operate Homebrew. Codex uses
-the persistent Node.js runtime bundled with ChatGPT Desktop when it is
-available, downloads the source, installs dependencies, runs guided setup, and
-verifies the service. It pauses only for browser, Feishu, macOS, and pairing
-actions that require the user. Codex may still request normal permission to
-download files or install a per-user background service.
+Codex downloads the project, uses a persistent Node.js runtime, runs guided
+setup, installs the per-user background service, and verifies it. You only step
+in for browser confirmation, Feishu app publication, macOS permission prompts,
+and the one-time private-chat pairing message.
 
-### Optional: install it yourself with Homebrew
-
-```bash
-brew install chengzeli7/tap/feishu-codex-bridge && feishu-codex-bridge init
-```
-
-The package includes the official `lark-cli`. The guided installer will:
-
-1. verify macOS, ChatGPT Desktop, Node.js, and `lark-cli`;
-2. open the official Feishu one-click app creation URL and wait for completion;
-3. listen for one private-chat pairing message to identify the only allowed user;
-4. collect allowlisted workspace paths;
-5. run health checks, install the LaunchAgent, and confirm the service is running.
-
-Application creation and browser authorization are handled by the official `lark-cli config init --new` flow. The pairing message cannot be skipped because it proves which Feishu user may remotely control the Mac.
-
-### Why no MCP or plugin is required
-
-The bridge is a local transport and background service: it receives Feishu
-events and talks to the Codex Desktop runtime. MCP is designed to expose tools
-and data sources to Codex, so adding an MCP server would not remove Feishu app
-creation, local service installation, or secure user pairing.
-
-A [Codex skill](https://developers.openai.com/codex/skills) is useful for making
-installation, upgrades, diagnostics, and recovery repeatable. For public
-distribution, OpenAI recommends packaging reusable skills as a
-[plugin](https://developers.openai.com/plugins/build/plugins). A future plugin
-can make this workflow discoverable in the Plugins Directory, but it would run
-the same local installer and require the same Feishu security checkpoints. The
-direct Codex prompt above is currently the shortest installation path.
-
-### Install from source
-
-#### 1. Install prerequisites
-
-You need:
-
-- ChatGPT Desktop installed at `/Applications/ChatGPT.app` and signed in
-- Node.js 20+
-- `lark-cli`
-- Optional: `ffmpeg` for voice transcription
-
-```bash
-git clone https://github.com/chengzeli7/feishu-codex-bridge.git
-cd feishu-codex-bridge
-npm ci
-```
-
-#### 2. Create a Feishu app
-
-Create a custom app in the [Feishu Open Platform](https://open.feishu.cn/app), enable the bot capability, and configure:
-
-Events and callbacks:
-
-- `im.message.receive_v1`
-- `card.action.trigger`
-
-Permissions:
-
-- `im:message.p2p_msg:readonly`
-- `im:message:send_as_bot`
-- `im:message:readonly`
-- Optional: `speech_to_text:speech`
-
-Create and publish an app version, then add the bot to your Feishu account. Publish another app version whenever permissions or events change.
-
-#### 3. Configure bot credentials locally
-
-```bash
-lark-cli config init --new
-lark-cli auth status --json --verify
-```
-
-Keep the `App ID` and `App Secret` only in the local `lark-cli` profile. Never commit them or send them through Feishu.
-
-#### 4. Pair the user and workspaces
-
-```bash
-npm run setup
-```
-
-The setup tool starts a one-shot event listener. When prompted, send this exact message to the bot:
+After installation, send these messages to the bot:
 
 ```text
-配对 Codex 助手
-```
-
-Then enter the absolute paths of the projects the bridge may use. The generated `config.local.json` is created with mode `0600` and is ignored by Git.
-
-#### 5. Verify and install the service
-
-```bash
-npm run doctor
-npm test
-npm run validate:cards
-npm run service -- install
-npm run service -- status
-```
-
-Send these messages to the bot:
-
-```text
-版本
 健康
 任务
-检查当前项目状态，只读取，不修改
+Check this project for the latest failing test. Do not modify files yet.
 ```
 
-## Usage
+Prefer installing it yourself? See the complete [installation guide](docs/INSTALL.md)
+for Homebrew and source options.
 
-Natural language is the default interface:
+### What to expect
 
-```text
-检查这个项目最近失败的测试
-再补充分析失败原因
-明天 10:30 汇总当前项目进度
-```
-
-Exact commands are available for deterministic control:
-
-| Command | Action |
+| Item | Expectation |
 |---|---|
-| `任务` / `首页` | Open the task dashboard |
-| `新建` | Open the create-task form |
-| `进度1` | Show task 1 summary |
-| `详情1` / `详细进展1` | Show structured execution details |
-| `继续1 <message>` | Continue task 1 |
-| `关注1` / `取消关注1` | Manage completion notifications |
-| `停止1` | Stop the current turn after confirmation |
-| `归档1` | Archive a completed task |
-| `队列` | Show queued messages |
-| `定时任务` | Show local schedules |
-| `健康` / `版本` / `帮助` | Show service status and help |
+| Typical setup time | About 5–15 minutes, depending on Feishu app publication |
+| Automated | Download, dependency setup, local configuration, LaunchAgent, diagnostics |
+| Requires you | Browser confirmation, Feishu app publication, macOS prompts, one pairing message |
+| Installed data | `~/Library/Application Support/CodexFeishuBridge` |
+| Logs | `~/Library/Logs/CodexFeishuBridge` |
+| Removal | `feishu-codex-bridge uninstall` stops the service and preserves local data |
 
-Numbers refer to the latest task list or search result.
+The installer preserves existing bridge state, Feishu profiles, Codex settings,
+and project files. It does not change global Git configuration.
 
-## Configuration
+## Safety by design
 
-Use [config.example.json](config.example.json) as a reference. The most important security fields are:
+- **Single user and private chat:** only the paired user and chat are accepted.
+- **Workspace allowlist:** new tasks can start only in configured project paths.
+- **No remote approval bypass:** Feishu-started turns use `approvalPolicy: never`.
+- **Local credentials:** Feishu secrets and Codex credentials never belong in the repository.
+- **Filtered progress:** raw reasoning, full tool arguments, terminal output, and common secrets are excluded or redacted.
+- **No remote desktop:** the bridge cannot view the screen or control the mouse and keyboard.
 
-```json
-{
-  "allowedUserIds": ["ou_replace_with_your_open_id"],
-  "allowedChatIds": ["oc_replace_with_your_chat_id"],
-  "requireP2P": true,
-  "workspaces": {
-    "my-project": "/absolute/path/to/my-project"
-  },
-  "workspaceAliases": {
-    "my-project": ["main project", "project nickname"]
-  },
-  "defaultWorkspace": "my-project"
-}
-```
+Treat access to the paired Feishu account as access to the configured workspaces.
+Review [SECURITY.md](SECURITY.md) before deployment.
 
-- `allowedUserIds` currently requires exactly one user.
-- `allowedChatIds` should contain the private chat discovered during pairing.
-- New tasks can only start in the absolute paths listed under `workspaces`.
-- `workspaceAliases` affects natural-language routing only; it does not expand filesystem access.
+## Current scope
 
-## Security Model
+| Supported | Not supported yet |
+|---|---|
+| macOS | Linux and Windows |
+| One allowlisted Feishu user | Multiple users |
+| Private bot chat | Group chat |
+| Codex runtime bundled with ChatGPT Desktop | Cloud-hosted Codex routing |
+| Allowlisted local workspaces | Arbitrary directory access |
 
-- Only private messages from the allowlisted user are accepted.
-- Feishu-started Codex turns use `approvalPolicy: never`.
-- Requests requiring additional permissions or human input must be handled in Codex Desktop.
-- Remote high-risk approvals, task deletion, and arbitrary directory selection are not supported.
-- Detailed progress excludes raw reasoning, full tool arguments, and full terminal output.
-- Common tokens, passwords, API keys, and URL credentials are redacted from progress and logs.
-- Configuration, queues, logs, and attachments are stored with local-user-only permissions.
+The Mac must be awake and online. A sleeping or powered-off Mac cannot process
+messages; this is a local bridge, not a cloud relay.
 
-Read [SECURITY.md](SECURITY.md) before exposing a deployment.
+## How is it different?
 
-## Multiple Macs
+| Capability | Feishu Codex Bridge | Remote desktop | Generic chat bot |
+|---|---|---|---|
+| Structured Codex task progress | Built in | Visible only through the screen | Requires custom integration |
+| Continue the same Codex task | Direct card reply or command | Manual Desktop interaction | Requires custom task binding |
+| Code and credentials stay on the Mac | Yes | Yes | Depends on the bot architecture |
+| Mobile interaction | Native Feishu cards | Streamed desktop UI | Chat only |
+| Screen, mouse, and keyboard control | No | Yes | No |
 
-Use a separate Feishu app and bot for each Mac. Multiple machines consuming the same app's long-lived event stream may race, miss messages, or execute a request more than once.
+## Compatibility
 
-See [docs/MULTI_MAC.md](docs/MULTI_MAC.md).
+| Component | Current support |
+|---|---|
+| Operating system | macOS |
+| Codex | Runtime bundled with ChatGPT Desktop |
+| Node.js | 20, 22, and 24 are covered by CI |
+| Feishu/Lark | Custom app, bot capability, private chat |
+| `lark-cli` | Bundled dependency, currently `1.0.89` |
 
-## Development
+## Frequently asked questions
 
-```bash
-npm ci
-npm test
-npm run validate:cards
-npm run export:bundle
-```
+<details>
+<summary><strong>Is this a cloud service?</strong></summary>
 
-Service operations:
+No. The event consumer, queue, scheduler, Codex runtime, and files run on your
+Mac. Feishu transports messages and cards.
 
-```bash
-npm run service -- status
-npm run service -- restart
-npm run service -- logs
-npm run service -- uninstall
-```
+</details>
 
-The export command creates a ZIP and SHA-256 file without `config.local.json`, `data/`, `node_modules/`, credentials, attachments, or logs.
+<details>
+<summary><strong>Can it read every file on my computer?</strong></summary>
 
-## Known Limitations
+No. New tasks are limited to the absolute project paths configured in the
+workspace allowlist. Codex and macOS permissions still apply.
 
-- The bridge cannot process messages while the Mac is asleep or powered off.
-- After the first install or an upgrade from an older build, quit and reopen Codex Desktop once so it joins the shared local app-server.
-- A turn actively owned by another Desktop process cannot be steered directly; follow-up messages are queued safely.
-- If the Codex daemon does not implement `thread/items/list`, detailed progress falls back to local pagination over `thread/read`.
-- Automatic card updates stop when the callback token expires; use **Refresh** to fetch a new snapshot.
-- Voice input depends on Feishu ASR permissions and a 60-second duration limit.
-- Scheduled tasks run locally; this is not a cloud scheduler.
+</details>
+
+<details>
+<summary><strong>Why does it stop replying when the Mac sleeps?</strong></summary>
+
+There is no cloud relay. The local bridge cannot consume or execute messages
+while the Mac is asleep or powered off.
+
+</details>
+
+<details>
+<summary><strong>Can one bot control several Macs?</strong></summary>
+
+Not safely in the current architecture. Use a separate Feishu app and bot for
+each Mac so long-lived event streams do not race or duplicate work.
+
+</details>
+
+<details>
+<summary><strong>Can I use it in a group chat?</strong></summary>
+
+Not in the current single-user security model. Only the paired private chat is accepted.
+
+</details>
+
+<details>
+<summary><strong>What happens when Codex needs approval?</strong></summary>
+
+Remote turns use `approvalPolicy: never`. Any additional permission or
+human-input request must be handled in Codex Desktop.
+
+</details>
+
+More answers and diagnostic steps are in [Troubleshooting](docs/TROUBLESHOOTING.md).
+
+## Documentation
+
+| Guide | What it covers |
+|---|---|
+| [Installation](docs/INSTALL.md) | Codex-managed, Homebrew, and source installation |
+| [Usage](docs/USAGE.md) | Natural language, exact commands, attachments, schedules, and queues |
+| [Configuration](docs/CONFIGURATION.md) | Allowlist, workspaces, bot profile, paths, and limits |
+| [Architecture](docs/ARCHITECTURE.md) | Components, data flow, task ownership, and local-first design |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | No replies, writer conflicts, stale cards, voice, and diagnostics |
+| [Multiple Macs](docs/MULTI_MAC.en.md) | Why each Mac should use a separate Feishu app |
+| [Codex-managed installer](docs/CODEX_INSTALL.md) | The autonomous installation contract used by Codex |
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Do not open a public issue for a vulnerability; follow [SECURITY.md](SECURITY.md) instead.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Do not open a public issue for a
+vulnerability; follow [SECURITY.md](SECURITY.md) instead.
 
 ## License
 
@@ -293,4 +231,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md). Do not open a public issue for a vulnera
 
 ## Disclaimer
 
-This is an unofficial community project and is not affiliated with or endorsed by OpenAI, Feishu, Lark, or ByteDance. Codex, ChatGPT, Feishu, and Lark are trademarks of their respective owners.
+This is an unofficial community project and is not affiliated with or endorsed
+by OpenAI, Feishu, Lark, or ByteDance. Codex, ChatGPT, Feishu, and Lark are
+trademarks of their respective owners.

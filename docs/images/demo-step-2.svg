@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">Product demo step 2: inspect structured Codex progress</title>
+  <desc id="desc">A representative Feishu card shows current progress, plan states, commands, and changed files using sample data.</desc>
+  <defs>
+    <linearGradient id="page" x1="0" x2="1"><stop offset="0" stop-color="#f5f7fb"/><stop offset="1" stop-color="#edf2ff"/></linearGradient>
+    <linearGradient id="head" x1="0" x2="1"><stop offset="0" stop-color="#e7efff"/><stop offset="1" stop-color="#dce8ff"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#64748b" flood-opacity=".16"/></filter>
+  </defs>
+  <rect width="1200" height="700" rx="28" fill="url(#page)"/>
+  <rect width="1200" height="76" rx="28" fill="#111827"/><rect y="48" width="1200" height="28" fill="#111827"/>
+  <circle cx="44" cy="38" r="14" fill="#4f7cff"/>
+  <text x="72" y="47" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="24" font-weight="700">Feishu Codex Bridge · 飞书私聊</text>
+  <rect x="962" y="21" width="204" height="36" rx="18" fill="#1e293b"/>
+  <text x="1064" y="45" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="15">DEMO · 示例数据</text>
+  <text x="54" y="119" fill="#64748b" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="17" font-weight="600">STEP 2 · FOLLOW STRUCTURED PROGRESS / 查看结构化进展</text>
+  <rect x="52" y="143" width="1096" height="512" rx="24" fill="#ffffff" filter="url(#shadow)"/>
+  <rect x="52" y="143" width="1096" height="105" rx="24" fill="url(#head)"/><rect x="52" y="224" width="1096" height="24" fill="url(#head)"/>
+  <circle cx="99" cy="190" r="20" fill="#6d5dfc"/><circle cx="106" cy="183" r="14" fill="#28c5fa" opacity=".75"/>
+  <text x="138" y="194" fill="#1d4ed8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="27" font-weight="750">详细进展</text>
+  <rect x="282" y="166" width="152" height="34" rx="10" fill="#bfd4ff"/>
+  <text x="358" y="189" text-anchor="middle" fill="#1d4ed8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="16" font-weight="700">运行中 · Desktop</text>
+  <text x="138" y="226" fill="#3769c8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="18">demo-project · 已运行 1 分 42 秒</text>
+  <rect x="80" y="275" width="1040" height="74" rx="15" fill="#eff4ff"/>
+  <text x="105" y="305" fill="#1e40af" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="20" font-weight="700">最近进展</text>
+  <text x="105" y="333" fill="#475569" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="18">已定位失败测试，正在核对缓存失效分支和调用方。</text>
+  <text x="82" y="388" fill="#0f172a" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="21" font-weight="750">执行计划</text>
+  <circle cx="101" cy="423" r="9" fill="#22c55e"/><text x="123" y="430" fill="#334155" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="18">复现失败测试</text>
+  <circle cx="101" cy="460" r="9" fill="#2563eb"/><text x="123" y="467" fill="#334155" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="18">检查缓存失效逻辑</text>
+  <circle cx="101" cy="497" r="9" fill="#cbd5e1"/><text x="123" y="504" fill="#64748b" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="18">整理结论和建议</text>
+  <rect x="552" y="382" width="252" height="132" rx="15" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="576" y="413" fill="#0f172a" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="18" font-weight="700">命令</text>
+  <text x="576" y="448" fill="#475569" font-family="SFMono-Regular,Consolas,monospace" font-size="15">npm test -- cache</text>
+  <text x="576" y="480" fill="#475569" font-family="SFMono-Regular,Consolas,monospace" font-size="15">rg "invalidate" src</text>
+  <rect x="828" y="382" width="292" height="132" rx="15" fill="#f8fafc" stroke="#e2e8f0"/>
+  <text x="852" y="413" fill="#0f172a" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="18" font-weight="700">文件</text>
+  <text x="852" y="448" fill="#475569" font-family="SFMono-Regular,Consolas,monospace" font-size="15">src/cache.mjs</text>
+  <text x="852" y="480" fill="#475569" font-family="SFMono-Regular,Consolas,monospace" font-size="15">test/cache.test.mjs</text>
+  <rect x="80" y="548" width="320" height="62" rx="12" fill="#2563eb"/>
+  <text x="240" y="588" text-anchor="middle" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="21" font-weight="700">刷新</text>
+  <rect x="420" y="548" width="320" height="62" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="580" y="588" text-anchor="middle" fill="#334155" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="21" font-weight="700">继续任务</text>
+  <rect x="760" y="548" width="360" height="62" rx="12" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="940" y="588" text-anchor="middle" fill="#334155" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="21" font-weight="700">返回任务列表</text>
+</svg>

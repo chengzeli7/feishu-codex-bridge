@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">Feishu Codex Bridge 架构</title>
+  <desc id="desc">飞书私聊通过本机 Bridge 连接 Codex Desktop 和项目白名单。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1"><stop offset="0" stop-color="#0b1020"/><stop offset="1" stop-color="#121a31"/></linearGradient>
+    <linearGradient id="line" x1="0" x2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#8b5cf6"/></linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <rect width="1200" height="360" rx="28" fill="url(#bg)"/>
+  <rect x="310" y="34" width="850" height="292" rx="24" fill="none" stroke="#334155" stroke-width="2" stroke-dasharray="8 8"/>
+  <text x="338" y="68" fill="#94a3b8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif" font-size="16">运行在你的 MAC 上</text>
+  <path d="M270 180H390M610 180H700M920 180H1010" stroke="url(#line)" stroke-width="6" stroke-linecap="round" filter="url(#glow)"/>
+  <g font-family="-apple-system,BlinkMacSystemFont,'PingFang SC','Microsoft YaHei',sans-serif" text-anchor="middle">
+    <g>
+      <rect x="40" y="105" width="230" height="150" rx="22" fill="#17213a" stroke="#334a76" stroke-width="2"/>
+      <circle cx="155" cy="148" r="22" fill="#2563eb"/><path d="M144 145h22v14h-12l-7 7v-7h-3z" fill="#dbeafe"/>
+      <text x="155" y="204" fill="#f8fafc" font-size="22" font-weight="700">飞书机器人私聊</text>
+      <text x="155" y="230" fill="#94a3b8" font-size="15">消息 · 卡片 · 文件</text>
+    </g>
+    <g>
+      <rect x="390" y="105" width="220" height="150" rx="22" fill="#17213a" stroke="#4f46e5" stroke-width="2"/>
+      <rect x="478" y="128" width="44" height="44" rx="12" fill="#4f46e5"/><path d="M490 150h20M500 140v20" stroke="#ede9fe" stroke-width="4" stroke-linecap="round"/>
+      <text x="500" y="204" fill="#f8fafc" font-size="22" font-weight="700">本机 Bridge</text>
+      <text x="500" y="230" fill="#94a3b8" font-size="15">队列 · 调度 · 状态</text>
+    </g>
+    <g>
+      <rect x="700" y="105" width="220" height="150" rx="22" fill="#17213a" stroke="#7c3aed" stroke-width="2"/>
+      <rect x="786" y="128" width="48" height="38" rx="7" fill="none" stroke="#c4b5fd" stroke-width="4"/><path d="M794 177h32" stroke="#c4b5fd" stroke-width="4" stroke-linecap="round"/>
+      <text x="810" y="204" fill="#f8fafc" font-size="22" font-weight="700">Codex Desktop</text>
+      <text x="810" y="230" fill="#94a3b8" font-size="15">本机 app-server</text>
+    </g>
+    <g>
+      <rect x="1010" y="105" width="150" height="150" rx="22" fill="#17213a" stroke="#059669" stroke-width="2"/>
+      <path d="M1052 141h24l8 8h35v31h-67z" fill="#10b981" opacity=".85"/>
+      <text x="1085" y="204" fill="#f8fafc" font-size="20" font-weight="700">项目目录</text>
+      <text x="1085" y="230" fill="#94a3b8" font-size="14">白名单路径</text>
+    </g>
+  </g>
+</svg>

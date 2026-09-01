@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" role="img" aria-labelledby="title desc">
+  <title id="title">Product demo step 1: start a Codex task from Feishu</title>
+  <desc id="desc">A representative Feishu private chat shows a user request and a newly created Codex task card using sample data.</desc>
+  <defs>
+    <linearGradient id="page" x1="0" x2="1"><stop offset="0" stop-color="#f5f7fb"/><stop offset="1" stop-color="#edf2ff"/></linearGradient>
+    <linearGradient id="head" x1="0" x2="1"><stop offset="0" stop-color="#e7efff"/><stop offset="1" stop-color="#dce8ff"/></linearGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#64748b" flood-opacity=".16"/></filter>
+  </defs>
+  <rect width="1200" height="700" rx="28" fill="url(#page)"/>
+  <rect width="1200" height="76" rx="28" fill="#111827"/><rect y="48" width="1200" height="28" fill="#111827"/>
+  <circle cx="44" cy="38" r="14" fill="#4f7cff"/>
+  <text x="72" y="47" fill="#f8fafc" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="24" font-weight="700">Feishu Codex Bridge · 飞书私聊</text>
+  <rect x="962" y="21" width="204" height="36" rx="18" fill="#1e293b"/>
+  <text x="1064" y="45" text-anchor="middle" fill="#cbd5e1" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="15">DEMO · 示例数据</text>
+  <text x="54" y="123" fill="#64748b" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="17" font-weight="600">STEP 1 · SEND A NORMAL MESSAGE / 发送普通消息</text>
+  <rect x="570" y="148" width="570" height="92" rx="22" fill="#dbeafe"/>
+  <text x="603" y="187" fill="#172554" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="23">检查 demo-project 最近失败的测试，</text>
+  <text x="603" y="219" fill="#172554" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="23">先只分析原因，不要修改文件。</text>
+  <circle cx="1158" cy="194" r="22" fill="#2563eb"/>
+  <rect x="62" y="270" width="940" height="368" rx="24" fill="#ffffff" filter="url(#shadow)"/>
+  <rect x="62" y="270" width="940" height="122" rx="24" fill="url(#head)"/><rect x="62" y="368" width="940" height="24" fill="url(#head)"/>
+  <circle cx="112" cy="318" r="21" fill="#6d5dfc"/><circle cx="119" cy="311" r="15" fill="#28c5fa" opacity=".75"/>
+  <text x="151" y="322" fill="#1d4ed8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="28" font-weight="750">Codex 任务已创建</text>
+  <rect x="383" y="295" width="92" height="36" rx="10" fill="#bfd4ff"/>
+  <text x="429" y="319" text-anchor="middle" fill="#1d4ed8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="17" font-weight="700">进行中</text>
+  <text x="151" y="362" fill="#3769c8" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="19">demo-project · 刚刚创建</text>
+  <rect x="94" y="422" width="876" height="92" rx="16" fill="#eff4ff"/>
+  <text x="122" y="457" fill="#1e40af" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="21" font-weight="700">正在连接 Codex Desktop</text>
+  <text x="122" y="490" fill="#64748b" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="19">任务将在本机白名单项目中执行，代码和凭据不会上传。</text>
+  <text x="104" y="555" fill="#334155" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="18" font-weight="700">项目</text>
+  <text x="104" y="585" fill="#0f172a" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="21">demo-project</text>
+  <text x="430" y="555" fill="#334155" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="18" font-weight="700">任务</text>
+  <text x="430" y="585" fill="#0f172a" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="21">8f31d2c1</text>
+  <rect x="716" y="544" width="236" height="58" rx="12" fill="#2563eb"/>
+  <text x="834" y="581" text-anchor="middle" fill="#ffffff" font-family="-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif" font-size="21" font-weight="700">查看进展</text>
+</svg>

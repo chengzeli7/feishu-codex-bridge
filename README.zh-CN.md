@@ -1,59 +1,72 @@
 # Feishu Codex Bridge
 
-[English](README.md) | **简体中文**
+<div align="center">
+
+**在飞书里使用 Codex，所有执行仍留在你的 Mac。**
+
+一个单用户、自托管的 Codex Desktop 飞书助手，用于远程创建任务、
+查看进展、继续对话和接收完成通知。
+
+[快速开始](docs/INSTALL.zh-CN.md) · [工作原理](docs/ARCHITECTURE.zh-CN.md) · [使用指南](docs/USAGE.zh-CN.md) · [English](README.md)
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.1.3-orange.svg)](CHANGELOG.md)
 
-一个运行在个人 Mac 上的单用户、自托管飞书 Codex 远程控制台。
+</div>
 
-Self-hosted Feishu/Lark remote control bridge for Codex Desktop. Create and continue Codex tasks, inspect live progress, and receive completion notifications from Feishu while all execution remains on your own Mac.
+![Feishu Codex Bridge 将飞书私聊连接到运行在个人 Mac 上的 Codex Desktop](docs/images/hero.png)
 
-> `v0.1.3` 是当前公开 Beta。项目依赖 Codex Desktop 当前提供的本地 app-server 能力，Codex 更新后可能需要同步适配。
+> **公开 Beta：** 当前版本为 `v0.1.3`。项目依赖 Codex Desktop 现有的本地
+> app-server 能力，后续 Codex 更新可能需要同步进行兼容性适配。
 
-## 能做什么
+## 它解决什么问题？
 
-- 直接发送普通消息创建 Codex 任务，无需记忆命令。
-- 回复任务卡或继续表达，将消息精确发送到对应任务，包括在 Codex Desktop 中关闭或停止的任务。
-- 在飞书查看当前阶段、执行计划、工具/MCP、命令、修改文件、错误和耗时。
-- 打开详细进展后，以约 2 秒防抖更新同一张卡片。
-- 在 Codex Desktop 和飞书之间共享任务、用户消息、回复与完成状态，并在任务结束后释放会话写锁。
-- 当其他 Codex Desktop 进程持有任务时，将后续消息保存在本地持久化队列，待写锁释放后只发送一次。
-- Desktop 任务同步默认不自动打开或接管窗口，避免后台任务造成跨窗口冲突。
-- 支持图片、文件、短语音、任务排队、断线恢复和完成通知。
-- 支持一次性、每日和每周本地定时任务。
-- 使用用户、私聊和项目目录白名单限制远程访问范围。
+Codex Desktop 在你的 Mac 上工作，但你不一定一直坐在电脑前。
+Feishu Codex Bridge 把机器人私聊变成一个轻量的任务控制台：
 
-它不是远程桌面：默认不能看屏幕、控制鼠标键盘，也不能绕过 Codex 或 macOS 权限。
+1. 在飞书发送普通消息，创建一个 Codex 任务。
+2. 在任务卡中查看计划、命令、文件、错误和耗时。
+3. 回复任务卡，在原有上下文中继续同一个任务。
+4. 在任务完成或需要你处理时收到通知。
 
-## 架构
+项目代码、Codex 会话、凭据和运行状态始终保留在自己的 Mac 上。
 
-```text
-Feishu private chat
-        │ message / Card 2.0 callback
-        ▼
-Feishu Codex Bridge ── local state / queue / scheduler
-        │ Unix WebSocket
-        ▼
-Codex Desktop app-server daemon
-        │
-        ▼
-Allowlisted local workspaces
-```
+## 20 秒产品演示
 
-飞书只负责传输指令和展示状态。Codex 任务、项目文件和运行状态保留在用户自己的 Mac 上。
+![产品演示：创建任务、查看结构化进展、收到结果并继续任务](docs/images/product-demo.gif)
 
-## 当前支持范围
+这是使用示例数据重绘的产品演示，不是真实用户或项目截图。可以打开三张原图查看细节：
+[创建任务](docs/images/demo-step-1.png) ·
+[查看进展](docs/images/demo-step-2.png) ·
+[收到结果并继续](docs/images/demo-step-3.png)。
 
-- macOS
-- 单个飞书用户
-- 机器人私聊
-- ChatGPT Desktop 内置 Codex 运行时
-- Node.js 20 或更高版本
-- 飞书版 `lark-cli`
+## 三个最常用的场景
 
-Linux、Windows、群聊、多用户和云端路由暂未支持。
+| 远程发起任务 | 随时查看进度 | 带着上下文继续 |
+|---|---|---|
+| 直接发送自然语言需求，或选择一个已加入白名单的项目。 | 不打开 Codex Desktop，也能查看任务列表和详细进展。 | 回复任务卡继续对应任务，需要精确选择时再使用命令。 |
+| `检查最近失败的测试，先不要修改` | 计划 · 工具/MCP · 命令 · 修改文件 · 错误 | `继续1，再补一个回归测试` |
+
+此外还支持图片、文件、短语音、持久化消息队列、完成关注，以及一次性、
+每日或每周在本机执行的定时任务。
+
+## 它适合你吗？
+
+| 适合这些情况 | 建议选择其他方案 |
+|---|---|
+| 经常在个人 Mac 上使用 Codex Desktop | 需要 Linux、Windows 或持续在线的云端执行器 |
+| 希望从手机查看或继续任务 | 需要完整控制屏幕、鼠标或键盘 |
+| 希望代码和凭据留在本机 | 需要多人共享或群聊机器人 |
+| 可以明确配置允许访问的项目 | 需要不受限制地访问任意目录 |
+
+## 工作原理
+
+![飞书私聊通过本机 Bridge 将请求发送给 Codex Desktop 和白名单项目](docs/images/workflow-zh-CN.svg)
+
+飞书只负责传输消息和展示卡片。Bridge、消息队列、调度器、Codex 运行时和
+项目文件都运行在你的 Mac 上。任务所有权与断线恢复机制见
+[架构说明](docs/ARCHITECTURE.zh-CN.md)。
 
 ## 快速开始
 
@@ -68,218 +81,143 @@ https://github.com/chengzeli7/feishu-codex-bridge/blob/main/docs/CODEX_INSTALL.m
 才暂停。
 ```
 
-这个流程不要求用户安装或操作 Homebrew。Codex 会优先使用 ChatGPT Desktop 内置的持久化
-Node.js 运行时，自动下载源码、安装依赖、完成引导配置并验证服务；只在浏览器、飞书、
-macOS 授权和配对等必须由用户完成的步骤暂停。下载文件或安装用户级后台服务时，Codex
-仍可能请求正常权限。
+Codex 会自动下载项目、选择持久化 Node.js 运行时、执行引导配置、安装当前用户的
+后台服务并完成验证。你只需要处理浏览器确认、发布飞书应用、macOS 权限提示，以及
+发送一次机器人私聊配对消息。
 
-### 可选：自己使用 Homebrew 安装
-
-```bash
-brew install chengzeli7/tap/feishu-codex-bridge && feishu-codex-bridge init
-```
-
-安装包内置官方 `lark-cli`。引导程序会：
-
-1. 检查 macOS、ChatGPT Desktop、Node.js 和 `lark-cli`；
-2. 自动打开飞书官方一键创建应用链接，并等待创建完成；
-3. 监听一次机器人私聊配对消息，确认唯一允许使用的用户；
-4. 收集允许访问的项目目录；
-5. 执行健康检查、安装 LaunchAgent，并确认服务已经运行。
-
-应用创建与浏览器授权复用官方 `lark-cli config init --new` 流程。配对消息不能静默跳过，因为它用于证明哪个飞书用户有权远程控制这台 Mac。
-
-### 为什么当前不要求 MCP 或 Plugin
-
-桥接器本质上是本机消息通道和后台服务：接收飞书事件，再连接 Codex Desktop 运行时。
-MCP 的主要用途是向 Codex 暴露工具和数据源，无法代替飞书应用创建、本机服务安装和安全配对。
-
-[Codex Skill](https://developers.openai.com/codex/skills) 很适合固化安装、升级、诊断和恢复流程。
-OpenAI 官方建议在面向其他用户分发时，把可复用 Skill 打包成
-[Plugin](https://developers.openai.com/plugins/build/plugins)。后续 Plugin 可以让这个流程出现在
-插件目录里，但它底层仍会运行同一个本机安装器，也不能跳过飞书安全确认。现阶段，直接把
-上面的提示词发给 Codex 是步骤最少的安装方式。
-
-### 从源码安装
-
-#### 1. 安装依赖
-
-准备以下环境：
-
-- 已安装并登录 `/Applications/ChatGPT.app`
-- Node.js 20+
-- `lark-cli`
-- 可选：`ffmpeg`，仅语音转写需要
-
-```bash
-git clone https://github.com/chengzeli7/feishu-codex-bridge.git
-cd feishu-codex-bridge
-npm ci
-```
-
-#### 2. 创建飞书应用
-
-在[飞书开放平台](https://open.feishu.cn/app)创建企业自建应用，启用机器人，并配置：
-
-事件与回调：
-
-- `im.message.receive_v1`
-- `card.action.trigger`
-
-权限：
-
-- `im:message.p2p_msg:readonly`
-- `im:message:send_as_bot`
-- `im:message:readonly`
-- 可选：`speech_to_text:speech`
-
-创建并发布应用版本，然后把机器人添加到自己的飞书。权限或事件变化后，需要再次发布应用版本。
-
-#### 3. 在本机配置机器人凭据
-
-```bash
-lark-cli config init --new
-lark-cli auth status --json --verify
-```
-
-`App ID` 和 `App Secret` 只保存在本机 `lark-cli` 配置中，不要写入项目文件，也不要通过飞书发送。
-
-#### 4. 配对用户和项目目录
-
-```bash
-npm run setup
-```
-
-配置器会启动一次性事件监听。按提示向机器人发送：
+安装完成后，在飞书依次发送：
 
 ```text
-配对 Codex 助手
-```
-
-然后配置允许访问的项目绝对路径。生成的 `config.local.json` 权限为 `0600`，并已被 Git 忽略。
-
-#### 5. 验证并安装后台服务
-
-```bash
-npm run doctor
-npm test
-npm run validate:cards
-npm run service -- install
-npm run service -- status
-```
-
-在飞书依次发送：
-
-```text
-版本
 健康
 任务
-检查当前项目状态，只读取，不修改
+检查这个项目最近失败的测试，暂时不要修改文件
 ```
 
-## 使用方式
+希望自己安装？完整的 Homebrew 和源码流程见[安装指南](docs/INSTALL.zh-CN.md)。
 
-自然语言是默认入口：
+### 安装前可以预期什么
 
-```text
-检查这个项目最近失败的测试
-再补充分析失败原因
-明天 10:30 汇总当前项目进度
-```
-
-精确命令用于明确控制：
-
-| 命令 | 作用 |
+| 项目 | 说明 |
 |---|---|
-| `任务` / `首页` | 打开任务首页 |
-| `新建` | 打开新建任务表单 |
-| `进度1` | 查看第 1 个任务摘要 |
-| `详情1` / `详细进展1` | 查看结构化执行详情 |
-| `继续1 消息` | 向指定任务发送后续指令 |
-| `关注1` / `取消关注1` | 管理完成通知 |
-| `停止1` | 二次确认后停止当前回合 |
-| `归档1` | 归档已结束任务 |
-| `队列` | 查看等待发送的消息 |
-| `定时任务` | 查看本地计划任务 |
-| `健康` / `版本` / `帮助` | 查看服务状态与说明 |
+| 常见耗时 | 约 5～15 分钟，具体取决于飞书应用发布过程 |
+| 自动完成 | 下载、依赖安装、本机配置、LaunchAgent 和诊断 |
+| 需要你处理 | 浏览器确认、发布飞书应用、macOS 提示和一次配对消息 |
+| 安装数据 | `~/Library/Application Support/CodexFeishuBridge` |
+| 日志 | `~/Library/Logs/CodexFeishuBridge` |
+| 卸载 | `feishu-codex-bridge uninstall` 停止服务并保留本机数据 |
 
-序号来自最近一次任务列表或搜索结果。
+安装器会保留已有 Bridge 状态、飞书 Profile、Codex 设置和项目文件，也不会修改
+全局 Git 配置。
 
-## 配置
+## 安全边界
 
-可参考 [config.example.json](config.example.json)。关键安全字段：
+- **单用户私聊：** 只接受完成配对的用户和私聊会话。
+- **项目白名单：** 新任务只能进入明确配置的项目目录。
+- **不绕过审批：** 飞书创建的回合使用 `approvalPolicy: never`。
+- **凭据保留本地：** 飞书和 Codex 凭据不会写入仓库。
+- **进展信息过滤：** 不展示原始 reasoning、完整工具参数和完整终端输出，常见密钥会脱敏。
+- **不是远程桌面：** 不能查看电脑屏幕，也不能控制鼠标和键盘。
 
-```json
-{
-  "allowedUserIds": ["ou_replace_with_your_open_id"],
-  "allowedChatIds": ["oc_replace_with_your_chat_id"],
-  "requireP2P": true,
-  "workspaces": {
-    "my-project": "/absolute/path/to/my-project"
-  },
-  "workspaceAliases": {
-    "my-project": ["主项目", "项目简称"]
-  },
-  "defaultWorkspace": "my-project"
-}
-```
+飞书账号一旦可以访问机器人，就相当于可以访问白名单中的项目。部署前请阅读
+[SECURITY.md](SECURITY.md)。
 
-- `allowedUserIds` 当前必须且只能配置一个用户。
-- `allowedChatIds` 建议固定配对产生的唯一私聊。
-- 新任务只能进入 `workspaces` 白名单中的绝对路径。
-- `workspaceAliases` 只影响自然语言识别，不扩大文件权限。
+## 当前支持范围
 
-## 安全模型
+| 已支持 | 暂未支持 |
+|---|---|
+| macOS | Linux 和 Windows |
+| 单个白名单飞书用户 | 多用户 |
+| 机器人私聊 | 群聊 |
+| ChatGPT Desktop 内置 Codex 运行时 | 云端 Codex 路由 |
+| 明确配置的本地项目 | 任意目录访问 |
 
-- 只接受白名单用户的私聊消息。
-- 飞书启动的 Codex 回合使用 `approvalPolicy: never`。
-- 需要额外权限或人工输入时，必须回到 Codex Desktop 处理。
-- 不支持飞书内高风险审批、删除 Codex 任务或任意本地目录选择。
-- 详细进展过滤原始 reasoning、完整工具参数和完整终端输出。
-- 命令、错误和 URL 中常见的 Token、密码、API Key 会被脱敏。
-- 配置、队列、日志和附件目录默认只允许当前 macOS 用户访问。
+Mac 必须保持唤醒并联网。睡眠或关机后无法处理消息，因为它是本机 Bridge，
+不是云端中转服务。
 
-公开部署前请阅读 [SECURITY.md](SECURITY.md)。
+## 和其他方案有什么区别？
 
-## 多台 Mac
+| 能力 | Feishu Codex Bridge | 远程桌面 | 普通聊天机器人 |
+|---|---|---|---|
+| 结构化 Codex 任务进展 | 内置 | 只能通过屏幕查看 | 需要自行集成 |
+| 继续同一个 Codex 任务 | 回复卡片或精确命令 | 手动操作 Desktop | 需要自行绑定任务 |
+| 代码和凭据保留在 Mac | 是 | 是 | 取决于机器人架构 |
+| 手机交互体验 | 原生飞书卡片 | 桌面画面串流 | 只有聊天 |
+| 控制屏幕、鼠标和键盘 | 否 | 是 | 否 |
 
-每台电脑建议使用独立飞书应用和机器人。不要让同一个应用在多台电脑上同时消费长连接事件，否则可能出现抢占、漏处理或重复执行。
+## 兼容性
 
-详细说明见 [docs/MULTI_MAC.md](docs/MULTI_MAC.md)。
+| 组件 | 当前支持 |
+|---|---|
+| 操作系统 | macOS |
+| Codex | ChatGPT Desktop 内置运行时 |
+| Node.js | CI 覆盖 20、22 和 24 |
+| 飞书/Lark | 企业自建应用、机器人能力、私聊 |
+| `lark-cli` | 项目内置依赖，当前为 `1.0.89` |
 
-## 开发与验证
+## 常见问题
 
-```bash
-npm ci
-npm test
-npm run validate:cards
-npm run export:bundle
-```
+<details>
+<summary><strong>这是云服务吗？</strong></summary>
 
-运维命令：
+不是。事件监听、队列、调度器、Codex 运行时和项目文件都在 Mac 上运行，
+飞书只负责传输消息和卡片。
 
-```bash
-npm run service -- status
-npm run service -- restart
-npm run service -- logs
-npm run service -- uninstall
-```
+</details>
 
-导出命令生成不包含 `config.local.json`、`data/`、`node_modules/`、凭据、附件和日志的 ZIP 与 SHA-256 文件。
+<details>
+<summary><strong>它可以读取电脑上的所有文件吗？</strong></summary>
 
-## 已知限制
+不可以。新任务只能进入项目白名单中的绝对路径，同时仍受 Codex 和 macOS 权限限制。
 
-- Mac 睡眠或关机时无法处理飞书消息；唤醒后服务会恢复。
-- 首次安装或从旧版本升级后，需要退出并重新打开一次 Codex Desktop，让它接入与桥接相同的本地 app-server。
-- Desktop 正在执行且被另一个进程持有的回合不能直接 steer，后续消息会安全排队。
-- 当前 Codex daemon 尚未实现 `thread/items/list` 时，详细进展会回退到 `thread/read` 本地分页。
-- 卡片更新 token 失效后停止自动更新，可点击“刷新”获取新状态。
-- 语音依赖飞书 ASR、租户权限和 60 秒时长限制。
-- 定时任务运行在本机，不是云端调度。
+</details>
+
+<details>
+<summary><strong>为什么 Mac 睡眠后机器人不回复？</strong></summary>
+
+项目没有云端中转服务。Mac 睡眠或关机后，本机 Bridge 无法接收和执行消息。
+
+</details>
+
+<details>
+<summary><strong>一个机器人可以控制多台 Mac 吗？</strong></summary>
+
+当前架构下不建议。每台 Mac 应使用独立飞书应用和机器人，避免长连接抢占、
+漏处理或重复执行。
+
+</details>
+
+<details>
+<summary><strong>可以在群聊中使用吗？</strong></summary>
+
+当前单用户安全模型不支持，只接受完成配对的机器人私聊。
+
+</details>
+
+<details>
+<summary><strong>Codex 需要审批时怎么办？</strong></summary>
+
+远程回合使用 `approvalPolicy: never`。额外权限或人工输入必须回到 Codex Desktop 处理。
+
+</details>
+
+更多答案和诊断步骤见[故障排查](docs/TROUBLESHOOTING.zh-CN.md)。
+
+## 文档
+
+| 指南 | 内容 |
+|---|---|
+| [安装](docs/INSTALL.zh-CN.md) | Codex 托管、Homebrew 和源码安装 |
+| [使用](docs/USAGE.zh-CN.md) | 自然语言、精确命令、附件、定时任务和队列 |
+| [配置](docs/CONFIGURATION.zh-CN.md) | 白名单、项目、机器人 Profile、路径和限制 |
+| [架构](docs/ARCHITECTURE.zh-CN.md) | 组件、数据流、任务所有权和本地优先设计 |
+| [故障排查](docs/TROUBLESHOOTING.zh-CN.md) | 不回复、窗口冲突、卡片不更新、语音和诊断 |
+| [多台 Mac](docs/MULTI_MAC.md) | 为什么每台 Mac 应使用独立飞书应用 |
+| [Codex 托管安装指南](docs/CODEX_INSTALL.md) | Codex 自动安装时遵循的执行约定 |
 
 ## 贡献
 
-参见 [CONTRIBUTING.md](CONTRIBUTING.md)。提交安全问题时不要创建公开 Issue，请使用 [SECURITY.md](SECURITY.md) 中的流程。
+参见 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请不要创建公开 Issue，
+应按照 [SECURITY.md](SECURITY.md) 中的方式提交。
 
 ## License
 
@@ -287,4 +225,5 @@ npm run service -- uninstall
 
 ## Disclaimer
 
-这是社区维护的非官方项目，与 OpenAI、飞书或字节跳动不存在隶属或官方合作关系。Codex、ChatGPT、Feishu 和 Lark 等名称及商标归各自权利人所有。
+这是社区维护的非官方项目，与 OpenAI、飞书、Lark 或字节跳动不存在隶属或官方合作关系。
+Codex、ChatGPT、Feishu 和 Lark 等名称及商标归各自权利人所有。
