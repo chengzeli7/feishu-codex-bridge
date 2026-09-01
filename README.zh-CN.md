@@ -156,49 +156,38 @@ Mac 必须保持唤醒并联网。睡眠或关机后无法处理消息，因为�
 
 ## 常见问题
 
-<details>
-<summary><strong>这是云服务吗？</strong></summary>
-
-不是。事件监听、队列、调度器、Codex 运行时和项目文件都在 Mac 上运行，
-飞书只负责传输消息和卡片。
-
-</details>
-
-<details>
-<summary><strong>它可以读取电脑上的所有文件吗？</strong></summary>
-
-不可以。新任务只能进入项目白名单中的绝对路径，同时仍受 Codex 和 macOS 权限限制。
-
-</details>
-
-<details>
-<summary><strong>为什么 Mac 睡眠后机器人不回复？</strong></summary>
-
-项目没有云端中转服务。Mac 睡眠或关机后，本机 Bridge 无法接收和执行消息。
-
-</details>
-
-<details>
-<summary><strong>一个机器人可以控制多台 Mac 吗？</strong></summary>
-
-当前架构下不建议。每台 Mac 应使用独立飞书应用和机器人，避免长连接抢占、
-漏处理或重复执行。
-
-</details>
-
-<details>
-<summary><strong>可以在群聊中使用吗？</strong></summary>
-
-当前单用户安全模型不支持，只接受完成配对的机器人私聊。
-
-</details>
-
-<details>
-<summary><strong>Codex 需要审批时怎么办？</strong></summary>
-
-远程回合使用 `approvalPolicy: never`。额外权限或人工输入必须回到 Codex Desktop 处理。
-
-</details>
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>这是云服务吗？</strong><br><br>
+      不是。飞书只传输消息和卡片，执行、队列、文件与凭据都留在你的 Mac。
+    </td>
+    <td width="50%" valign="top">
+      <strong>可以读取所有文件吗？</strong><br><br>
+      不可以。新任务仅限项目白名单，并继续受 Codex 与 macOS 权限限制。
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>为什么 Mac 睡眠后不回复？</strong><br><br>
+      项目没有云端中转。Mac 睡眠或关机后，本机 Bridge 无法接收和执行消息。
+    </td>
+    <td width="50%" valign="top">
+      <strong>一个机器人能控制多台 Mac 吗？</strong><br><br>
+      建议每台 Mac 使用独立飞书应用，避免长连接抢占、漏处理或重复执行。
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>支持群聊吗？</strong><br><br>
+      暂不支持。当前单用户安全模型只接受完成配对的机器人私聊。
+    </td>
+    <td width="50%" valign="top">
+      <strong>Codex 需要审批怎么办？</strong><br><br>
+      远程回合使用 <code>approvalPolicy: never</code>，额外权限或人工输入需回到 Codex Desktop。
+    </td>
+  </tr>
+</table>
 
 更多答案和诊断步骤见[故障排查](docs/TROUBLESHOOTING.zh-CN.md)。
 

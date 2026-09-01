@@ -159,52 +159,38 @@ messages; this is a local bridge, not a cloud relay.
 
 ## Frequently asked questions
 
-<details>
-<summary><strong>Is this a cloud service?</strong></summary>
-
-No. The event consumer, queue, scheduler, Codex runtime, and files run on your
-Mac. Feishu transports messages and cards.
-
-</details>
-
-<details>
-<summary><strong>Can it read every file on my computer?</strong></summary>
-
-No. New tasks are limited to the absolute project paths configured in the
-workspace allowlist. Codex and macOS permissions still apply.
-
-</details>
-
-<details>
-<summary><strong>Why does it stop replying when the Mac sleeps?</strong></summary>
-
-There is no cloud relay. The local bridge cannot consume or execute messages
-while the Mac is asleep or powered off.
-
-</details>
-
-<details>
-<summary><strong>Can one bot control several Macs?</strong></summary>
-
-Not safely in the current architecture. Use a separate Feishu app and bot for
-each Mac so long-lived event streams do not race or duplicate work.
-
-</details>
-
-<details>
-<summary><strong>Can I use it in a group chat?</strong></summary>
-
-Not in the current single-user security model. Only the paired private chat is accepted.
-
-</details>
-
-<details>
-<summary><strong>What happens when Codex needs approval?</strong></summary>
-
-Remote turns use `approvalPolicy: never`. Any additional permission or
-human-input request must be handled in Codex Desktop.
-
-</details>
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Is this a cloud service?</strong><br><br>
+      No. Feishu transports messages and cards; execution, queues, files, and credentials stay on your Mac.
+    </td>
+    <td width="50%" valign="top">
+      <strong>Can it read every file?</strong><br><br>
+      No. New tasks are restricted to allowlisted projects and remain subject to Codex and macOS permissions.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Why no reply after the Mac sleeps?</strong><br><br>
+      There is no cloud relay. A sleeping or powered-off Mac cannot consume or execute messages.
+    </td>
+    <td width="50%" valign="top">
+      <strong>Can one bot control several Macs?</strong><br><br>
+      Use a separate Feishu app per Mac to avoid event-stream races, missed messages, or duplicate work.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <strong>Does group chat work?</strong><br><br>
+      Not yet. The current single-user security model accepts only the paired private chat.
+    </td>
+    <td width="50%" valign="top">
+      <strong>What if Codex needs approval?</strong><br><br>
+      Remote turns use <code>approvalPolicy: never</code>. Handle extra permissions or human input in Codex Desktop.
+    </td>
+  </tr>
+</table>
 
 More answers and diagnostic steps are in [Troubleshooting](docs/TROUBLESHOOTING.md).
 
