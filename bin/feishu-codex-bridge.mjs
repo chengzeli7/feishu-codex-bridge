@@ -3,6 +3,7 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { VERSION } from "../src/version.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const command = process.argv[2] ?? "help";
@@ -20,7 +21,7 @@ const commands = {
 };
 
 if (command === "help" || command === "--help" || command === "-h") {
-  console.log(`Feishu Codex Bridge v0.1.0
+  console.log(`Feishu Codex Bridge v${VERSION}
 
 Usage:
   feishu-codex-bridge init              Run guided end-to-end setup

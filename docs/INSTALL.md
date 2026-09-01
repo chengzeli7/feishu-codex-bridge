@@ -116,6 +116,22 @@ Quit and reopen Codex Desktop once. Then send:
 任务
 ```
 
+## Upgrade an existing installation
+
+Run the Codex-managed installation prompt again, or update a source checkout to
+the latest published release and rerun:
+
+```bash
+npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+npm run doctor
+npm run service -- install
+npm run service -- status
+```
+
+The installer creates a versioned release directory and preserves the existing
+configuration, state, Feishu profiles, logs, and allowlisted workspaces. Quit
+and reopen Codex Desktop once after the upgrade, then send `版本` and `健康`.
+
 ## Next steps
 
 - [Configure workspaces and limits](CONFIGURATION.md)

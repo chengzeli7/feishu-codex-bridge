@@ -7,6 +7,7 @@ import { loadConfig } from "../src/config.mjs";
 const run = promisify(execFile);
 const config = await loadConfig();
 const checks = [];
+const larkArgs = (args) => config.larkProfile ? ["--profile", config.larkProfile, ...args] : args;
 
 async function check(name, operation, { required = true } = {}) {
   try {
@@ -45,13 +46,14 @@ if (config.codexAppServerSocket) {
     return status.appServerVersion;
   });
 }
-await check("lark-cli", async () => (await run(config.larkBin, ["--version"], { env: { ...process.env, LARKSUITE_CLI_NO_UPDATE_NOTIFIER: "1", LARKSUITE_CLI_NO_SKILLS_NOTIFIER: "1" } })).stdout.trim());
+await check("lark-cli", async () => (await run(config.larkBin, larkArgs(["--version"]), { env: { ...process.env, LARKSUITE_CLI_NO_UPDATE_NOTIFIER: "1", LARKSUITE_CLI_NO_SKILLS_NOTIFIER: "1" } })).stdout.trim());
 await check("lark bot auth", async () => {
-  const status = JSON.parse((await run(config.larkBin, ["auth", "status", "--json"], {
+  const status = JSON.parse((await run(config.larkBin, larkArgs(["auth", "status", "--json", "--verify"]), {
     env: { ...process.env, LARKSUITE_CLI_NO_UPDATE_NOTIFIER: "1", LARKSUITE_CLI_NO_SKILLS_NOTIFIER: "1" }
   })).stdout);
   if (!status.identities?.bot?.available) throw new Error(status.identities?.bot?.message ?? "bot identity unavailable");
-  return status.identities.bot.message;
+  const profile = config.larkProfile ? `profile ${config.larkProfile}, ` : "";
+  return `${profile}${status.identities.bot.appName} (${status.appId})`;
 });
 await check("ffmpeg (optional voice input)", async () => (await run(config.ffmpegBin, ["-version"])).stdout.split("\n")[0], { required: false });
 

@@ -3,6 +3,7 @@ import { PassThrough } from "node:stream";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { CodexClient, userInput } from "../src/codex-client.mjs";
+import { VERSION } from "../src/version.mjs";
 
 test("connects to the shared Desktop app-server over a Unix WebSocket", async () => {
   const sent = [];
@@ -32,7 +33,7 @@ test("connects to the shared Desktop app-server over a Unix WebSocket", async ()
     await client.start();
     assert.equal(client.ready, true);
     assert.equal(sent[0].method, "initialize");
-    assert.equal(sent[0].params.clientInfo.version, "0.1.3");
+    assert.equal(sent[0].params.clientInfo.version, VERSION);
     assert.equal(sent[1].method, "initialized");
   } finally {
     await client.stop();

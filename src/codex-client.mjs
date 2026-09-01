@@ -4,6 +4,7 @@ import net from "node:net";
 import { createInterface } from "node:readline";
 import { setTimeout as delay } from "node:timers/promises";
 import WebSocket from "ws";
+import { VERSION } from "./version.mjs";
 
 const THREAD_STORE_RETRY_DELAYS_MS = [50, 100, 200, 400, 800];
 
@@ -43,7 +44,7 @@ export class CodexClient extends EventEmitter {
       if (this.socketPath) await this.#startWebSocket();
       else this.#startStdio();
       await this.request("initialize", {
-        clientInfo: { name: "feishu-codex-bridge", version: "0.1.3" },
+        clientInfo: { name: "feishu-codex-bridge", version: VERSION },
         capabilities: { experimentalApi: true }
       });
       this.notify("initialized");

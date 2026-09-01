@@ -1,6 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { loadConfig } from "../src/config.mjs";
 import { CodexClient, latestAgentMessage, latestTurn } from "../src/codex-client.mjs";
+import { VERSION } from "../src/version.mjs";
 
 const config = await loadConfig();
 const workspaceAlias = process.argv[2] ?? "flow-main";
@@ -14,8 +15,8 @@ try {
   await client.start();
   const created = await client.createTask({
     cwd,
-    name: "Feishu Codex Bridge v0.1.3 smoke test",
-    prompt: "This is the Feishu Codex Bridge v0.1.3 task creation smoke test. Do not modify files. Reply exactly: create smoke passed",
+    name: `Feishu Codex Bridge v${VERSION} smoke test`,
+    prompt: `This is the Feishu Codex Bridge v${VERSION} task creation smoke test. Do not modify files. Reply exactly: create smoke passed`,
     effort: "medium"
   });
   console.log(`created thread ${created.thread.id}`);

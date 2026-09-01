@@ -4,6 +4,22 @@ All notable public changes are documented here. This project follows [Semantic V
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-09-01
+
+- Pins every Feishu event consumer, API request, attachment download, and health
+  check to the configured `lark-cli` profile, preventing multiple local bots
+  from taking over each other's messages.
+- Tracks the newest Desktop rollout turn even when a large session tail no
+  longer contains its original `turn_context` event.
+- Releases a completed Desktop writer and retries the same queued continuation
+  idempotently, so stopped or completed tasks can continue from Feishu without
+  losing the message or showing a false failure.
+- Uses `package.json` as the single version source for the CLI, service, Codex
+  client, cards, guided setup, smoke test, and runtime health response.
+- Added a bilingual product-led README, reconstructed product tour, workflow
+  diagrams, compact FAQ, and launch-ready social assets.
+- Updated the bundled `lark-cli` dependency to `1.0.89`.
+
 ## [0.1.3] - 2026-08-21
 
 - Fixed false failure cards when another Codex Desktop process owns an unloaded task.
@@ -50,7 +66,8 @@ First public beta.
 - Added secret redaction and filtering of raw reasoning, full tool arguments, and full terminal output.
 - Added an interactive setup flow, sanitized offline bundle export, macOS LaunchAgent installer, tests, and Card 2.0 validation.
 
-[Unreleased]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.0...v0.1.1

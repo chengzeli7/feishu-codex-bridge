@@ -11,13 +11,13 @@
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.3-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.4-orange.svg)](CHANGELOG.md)
 
 </div>
 
 ![Feishu Codex Bridge 将飞书私聊连接到运行在个人 Mac 上的 Codex Desktop](docs/images/hero.png)
 
-> **公开 Beta：** 当前版本为 `v0.1.3`。项目依赖 Codex Desktop 现有的本地
+> **公开 Beta：** 当前版本为 `v0.1.4`。项目依赖 Codex Desktop 现有的本地
 > app-server 能力，后续 Codex 更新可能需要同步进行兼容性适配。
 
 ## 它解决什么问题？
@@ -39,7 +39,8 @@ Feishu Codex Bridge 把机器人私聊变成一个轻量的任务控制台：
 这是使用示例数据重绘的产品演示，不是真实用户或项目截图。可以打开三张原图查看细节：
 [创建任务](docs/images/demo-step-1.png) ·
 [查看进展](docs/images/demo-step-2.png) ·
-[收到结果并继续](docs/images/demo-step-3.png)。
+[收到结果并继续](docs/images/demo-step-3.png) ·
+[观看 12 秒宣传视频](docs/media/x-launch-demo.mp4)。
 
 ## 三个最常用的场景
 
@@ -133,6 +134,9 @@ Codex 会自动下载项目、选择持久化 Node.js 运行时、执行引导�
 
 Mac 必须保持唤醒并联网。睡眠或关机后无法处理消息，因为它是本机 Bridge，
 不是云端中转服务。
+
+当前飞书卡片和精确命令以中文为主；自然语言任务可以使用 Codex 支持的其他语言。
+完整的卡片和命令多语言支持将在后续版本提供。
 
 ## 和其他方案有什么区别？
 

@@ -6,10 +6,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultCodexAppServerSocket } from "../src/config.mjs";
 import { enableDesktopDaemonEnvironment } from "../src/desktop-daemon-env.mjs";
+import { VERSION } from "../src/version.mjs";
 
 const LABEL = "io.github.chengzeli7.feishu-codex-bridge";
 const LEGACY_LABELS = ["com.chengze.codex-feishu-bridge", "com.chengze.codex-feishu-app-server"];
-const VERSION = "0.1.3";
 const DESKTOP_CODEX_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const userHome = os.homedir();
@@ -125,6 +125,7 @@ async function install() {
   const usesLegacyCodex = installedConfig.codexBin === "codex" || /\/\.nvm\/.*\/codex$/.test(installedConfig.codexBin ?? "");
   let changed = false;
   for (const key of [
+    "larkProfile",
     "workspaceAliases",
     "maxOfflineOperations",
     "timeZone",

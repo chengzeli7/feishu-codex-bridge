@@ -27,7 +27,8 @@ const DEFAULTS = {
   codexAppServerSocket: null,
   desktopSyncEnabled: false,
   desktopAutoOpenEnabled: false,
-  larkBin: "lark-cli"
+  larkBin: "lark-cli",
+  larkProfile: null
 };
 
 export const DESKTOP_CODEX_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
@@ -111,6 +112,9 @@ export async function loadConfig(configPath = process.env.BRIDGE_CONFIG ?? "./co
     throw new Error(`Desktop shared sync requires the default Codex app-server socket: ${defaultCodexAppServerSocket()}`);
   }
   if (typeof config.larkBin !== "string" || !config.larkBin) throw new Error("larkBin must be a non-empty string");
+  if (config.larkProfile !== null && (typeof config.larkProfile !== "string" || !config.larkProfile.trim())) {
+    throw new Error("larkProfile must be null or a non-empty string");
+  }
 
   return {
     ...config,

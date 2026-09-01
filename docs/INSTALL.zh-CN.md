@@ -109,6 +109,20 @@ npm run service -- status
 任务
 ```
 
+## 升级已有安装
+
+重新发送 Codex 托管安装提示词，或将源码目录更新到最新正式 Release 后执行：
+
+```bash
+npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+npm run doctor
+npm run service -- install
+npm run service -- status
+```
+
+安装器会创建新的版本目录，并保留已有配置、状态、飞书 Profile、日志和项目白名单。
+升级后退出并重新打开一次 Codex Desktop，再向机器人发送 `版本` 和 `健康`。
+
 ## 下一步
 
 - [配置项目和限制](CONFIGURATION.zh-CN.md)

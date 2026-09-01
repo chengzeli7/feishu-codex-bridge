@@ -118,3 +118,40 @@ test("streams PCM transcription payload through stdin instead of argv", async ()
   assert.equal(result.recognition_text, "检查完成");
   assert.equal(JSON.parse(requestBody).speech.speech, "cGNt");
 });
+
+test("pins event consumers and API requests to one lark profile", async () => {
+  const spoolRoot = await mkdtemp(path.join(os.tmpdir(), "lark-profile-"));
+  const calls = [];
+  const children = [];
+  const lark = new LarkClient({
+    profile: "ai-driving",
+    spoolRoot,
+    spawn(command, args) {
+      calls.push({ command, args });
+      const child = new EventEmitter();
+      child.stdin = new PassThrough();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => true;
+      children.push(child);
+      if (!args.includes("event")) {
+        queueMicrotask(() => {
+          child.stdout.end('{"data":{"ok":true}}');
+          child.emit("exit", 0);
+        });
+      }
+      return child;
+    }
+  });
+  lark.on("exit", () => {});
+
+  try {
+    lark.startConsumer("im.message.receive_v1");
+    await lark.replyMarkdown("om_test", "hello", "profile-test");
+    assert.deepEqual(calls[0].args.slice(0, 4), ["--profile", "ai-driving", "event", "consume"]);
+    assert.deepEqual(calls[1].args.slice(0, 4), ["--profile", "ai-driving", "im", "+messages-reply"]);
+  } finally {
+    await lark.stop();
+    await rm(spoolRoot, { recursive: true, force: true });
+  }
+});

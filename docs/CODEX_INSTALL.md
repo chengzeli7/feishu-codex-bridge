@@ -46,17 +46,23 @@ Verify that Node.js is version 20 or later. If those files do not exist, use an
 already-installed, persistent Node.js 20+ runtime. Do not install Homebrew or a
 system-wide runtime unless the user explicitly asks for that fallback.
 
-## 3. Download an isolated source copy
+## 3. Download an isolated release copy
 
-Create a new temporary directory with `mktemp -d`. Clone
-`https://github.com/chengzeli7/feishu-codex-bridge.git` into that exact directory
-with a shallow clone. Do not reuse an unrelated directory and do not modify the
-user's project repositories.
+Resolve the latest non-draft GitHub release tag first. Prefer
+`gh release view --repo chengzeli7/feishu-codex-bridge --json tagName` when `gh`
+is available; otherwise query the GitHub latest-release API with macOS `curl`.
+Do not silently install the moving `main` branch.
 
-Review the checked-out `README.md`, `SECURITY.md`, current version, and Git
-remote before executing project scripts. If Git is unavailable, download the
-source archive for the current GitHub release with macOS `curl` and extract it
-into the temporary directory instead.
+Create a new temporary directory with `mktemp -d`. Clone the repository into
+that exact directory with `--depth 1 --branch <release-tag>`, where
+`<release-tag>` is the resolved release. Do not reuse an unrelated directory
+and do not modify the user's project repositories. If Git is unavailable,
+download and extract the source archive for the same release tag with macOS
+`curl`.
+
+Review the checked-out `README.md`, `SECURITY.md`, package version, tag, and Git
+remote before executing project scripts. The package version must equal the
+release tag without the leading `v`; stop and report the mismatch if it does not.
 
 ## 4. Install local dependencies without Homebrew
 

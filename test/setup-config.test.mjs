@@ -33,6 +33,7 @@ test("builds a desktop-synced configuration without credentials", () => {
     workspaceEntries: [{ alias: "home", directory: "/tmp/home-project", aliases: ["家庭项目"] }],
     defaultWorkspace: "home",
     larkBin: "/opt/homebrew/bin/lark-cli",
+    larkProfile: "edith",
     ffmpegBin: "/opt/homebrew/bin/ffmpeg"
   });
   assert.deepEqual(config.allowedUserIds, ["ou_home_user"]);
@@ -42,6 +43,7 @@ test("builds a desktop-synced configuration without credentials", () => {
   assert.equal(config.desktopAutoOpenEnabled, false);
   assert.equal(config.recentThreadLimit, 5);
   assert.equal(config.codexBin, "/Applications/ChatGPT.app/Contents/Resources/codex");
+  assert.equal(config.larkProfile, "edith");
   assert.equal(Object.hasOwn(config, "appSecret"), false);
 });
 

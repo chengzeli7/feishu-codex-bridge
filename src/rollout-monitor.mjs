@@ -9,6 +9,17 @@ function messageText(content) {
     .trim();
 }
 
+function turnSnapshot(turnId, event, { startedAt = null } = {}) {
+  return {
+    turnId,
+    startedAt,
+    lastEventAt: event.timestamp ?? null,
+    status: "inProgress",
+    progress: "",
+    result: ""
+  };
+}
+
 export async function readRolloutSnapshot(filePath, {
   now = Date.now(),
   staleAfterMs = 10 * 60_000,
@@ -42,15 +53,12 @@ export async function readRolloutSnapshot(filePath, {
   let current = null;
   for (const event of events) {
     if (event.type === "turn_context" && event.payload?.turn_id) {
-      current = {
-        turnId: event.payload.turn_id,
-        startedAt: event.timestamp ?? null,
-        lastEventAt: event.timestamp ?? null,
-        status: "inProgress",
-        progress: "",
-        result: ""
-      };
+      current = turnSnapshot(event.payload.turn_id, event, { startedAt: event.timestamp ?? null });
       continue;
+    }
+    const eventTurnId = event.type === "event_msg" ? event.payload?.turn_id : null;
+    if (eventTurnId && current?.turnId !== eventTurnId) {
+      current = turnSnapshot(eventTurnId, event);
     }
     if (!current) continue;
     current.lastEventAt = event.timestamp ?? current.lastEventAt;

@@ -18,3 +18,15 @@ export function hasAvailableBot(statusText) {
     return false;
   }
 }
+
+export function effectiveProfile(profileListText) {
+  try {
+    const profiles = JSON.parse(profileListText);
+    if (!Array.isArray(profiles)) return null;
+    return profiles.find((profile) => profile?.effective === true)?.name ??
+      profiles.find((profile) => profile?.active === true)?.name ??
+      null;
+  } catch {
+    return null;
+  }
+}

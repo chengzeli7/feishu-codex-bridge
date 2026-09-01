@@ -11,13 +11,13 @@ Codex Desktop tasks from a Feishu or Lark private chat.
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.3-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.4-orange.svg)](CHANGELOG.md)
 
 </div>
 
 ![Feishu Codex Bridge connects a private chat to Codex Desktop running on your Mac](docs/images/hero.png)
 
-> **Public beta:** `v0.1.3` uses local app-server capabilities currently bundled
+> **Public beta:** `v0.1.4` uses local app-server capabilities currently bundled
 > with Codex Desktop. A future Codex update may require a compatibility update.
 
 ## What problem does it solve?
@@ -40,7 +40,8 @@ This is a reconstructed product demo with representative data—not a screenshot
 of a real user or repository. Open the full-size frames:
 [start a task](docs/images/demo-step-1.png) ·
 [follow progress](docs/images/demo-step-2.png) ·
-[get the result and continue](docs/images/demo-step-3.png).
+[get the result and continue](docs/images/demo-step-3.png) ·
+[watch the 12-second launch video](docs/media/x-launch-demo.mp4).
 
 ## The three everyday workflows
 
@@ -136,6 +137,10 @@ Review [SECURITY.md](SECURITY.md) before deployment.
 
 The Mac must be awake and online. A sleeping or powered-off Mac cannot process
 messages; this is a local bridge, not a cloud relay.
+
+The current Feishu cards and deterministic commands are Chinese-first. Natural
+language task prompts may be written in any language supported by Codex; full
+card and command localization is planned for a later release.
 
 ## How is it different?
 

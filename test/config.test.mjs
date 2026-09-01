@@ -14,10 +14,33 @@ test("loads and resolves a valid single-user configuration", async () => {
     assert.equal(config.requireP2P, true);
     assert.equal(config.desktopSyncEnabled, false);
     assert.equal(config.desktopAutoOpenEnabled, false);
+    assert.equal(config.larkProfile, null);
     assert.equal(config.recentThreadLimit, 5);
     assert.equal(config.codexAppServerSocket, null);
     assert.equal(config.stateFile, path.join(directory, "data/state.json"));
     assert.equal(config.workspaces.app, "/tmp/app");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("accepts one explicit lark profile and rejects blank profiles", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "bridge-config-"));
+  const file = path.join(directory, "config.json");
+  try {
+    await writeFile(file, JSON.stringify({
+      allowedUserIds: ["ou_test"],
+      workspaces: { app: "/tmp/app" },
+      larkProfile: "edith"
+    }));
+    assert.equal((await loadConfig(file)).larkProfile, "edith");
+
+    await writeFile(file, JSON.stringify({
+      allowedUserIds: ["ou_test"],
+      workspaces: { app: "/tmp/app" },
+      larkProfile: "  "
+    }));
+    await assert.rejects(loadConfig(file), /larkProfile/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

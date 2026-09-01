@@ -28,10 +28,11 @@ function parsedOutput(source) {
 }
 
 export class LarkClient extends EventEmitter {
-  constructor({ spawn = nodeSpawn, bin = "lark-cli", spoolRoot = "./data/events", requestTimeoutMs = 30_000 } = {}) {
+  constructor({ spawn = nodeSpawn, bin = "lark-cli", profile = null, spoolRoot = "./data/events", requestTimeoutMs = 30_000 } = {}) {
     super();
     this.spawn = spawn;
     this.bin = bin;
+    this.profile = profile;
     this.spoolRoot = path.resolve(spoolRoot);
     this.requestTimeoutMs = requestTimeoutMs;
     this.consumers = new Map();
@@ -57,7 +58,7 @@ export class LarkClient extends EventEmitter {
     mkdirSync(path.join(this.spoolRoot, directory), { recursive: true, mode: 0o700 });
     const child = this.spawn(
       this.bin,
-      ["event", "consume", eventKey, "--output-dir", directory, "--as", "bot"],
+      this.#profileArgs(["event", "consume", eventKey, "--output-dir", directory, "--as", "bot"]),
       {
         cwd: this.spoolRoot,
         stdio: ["pipe", "pipe", "pipe"],
@@ -233,7 +234,7 @@ export class LarkClient extends EventEmitter {
 
   #run(args, { cwd, input, timeoutMs = this.requestTimeoutMs } = {}) {
     return new Promise((resolve, reject) => {
-      const child = this.spawn(this.bin, args, {
+      const child = this.spawn(this.bin, this.#profileArgs(args), {
         cwd,
         stdio: [input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
         env: { ...process.env, ...QUIET_ENV }
@@ -272,5 +273,9 @@ export class LarkClient extends EventEmitter {
       });
       if (input !== undefined) child.stdin.end(input);
     });
+  }
+
+  #profileArgs(args) {
+    return this.profile ? ["--profile", this.profile, ...args] : args;
   }
 }

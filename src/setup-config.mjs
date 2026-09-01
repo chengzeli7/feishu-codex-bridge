@@ -48,6 +48,7 @@ export function buildBridgeConfig({
   workspaceEntries,
   defaultWorkspace,
   larkBin,
+  larkProfile = null,
   ffmpegBin = "/opt/homebrew/bin/ffmpeg",
   timeZone = "Asia/Shanghai"
 }) {
@@ -94,6 +95,7 @@ export function buildBridgeConfig({
     codexAppServerSocket: defaultCodexAppServerSocket(),
     desktopSyncEnabled: true,
     desktopAutoOpenEnabled: false,
-    larkBin
+    larkBin,
+    larkProfile
   };
 }

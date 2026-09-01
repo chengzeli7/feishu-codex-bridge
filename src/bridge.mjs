@@ -7,6 +7,7 @@ import { detectWorkspace, routeNaturalMessage } from "./intent-router.mjs";
 import { AttachmentManager, eventHasResources } from "./attachment-manager.mjs";
 import { nextScheduleRun, parseScheduleExpression, scheduleLabel } from "./scheduler.mjs";
 import { StateStore } from "./state-store.mjs";
+import { VERSION } from "./version.mjs";
 import { readRolloutSnapshot } from "./rollout-monitor.mjs";
 import { ProgressTracker } from "./progress-tracker.mjs";
 import {
@@ -32,7 +33,6 @@ import { DesktopSync } from "./desktop-sync.mjs";
 import { CodexDaemonManager } from "./codex-daemon.mjs";
 import { enableDesktopDaemonEnvironment } from "./desktop-daemon-env.mjs";
 
-const VERSION = "0.1.3";
 const EVENT_KEYS = ["im.message.receive_v1", "card.action.trigger"];
 const DETAIL_ITEM_PAGE_SIZE = 24;
 const MUTATING_ACTIONS = new Set([
@@ -73,6 +73,10 @@ function isDesktopActive(thread) {
   return thread.status?.type !== "active" && thread.rollout?.status === "inProgress";
 }
 
+function isWriterConflict(error) {
+  return /already has an active writer/i.test(error?.message ?? "");
+}
+
 function mediaFallback(event) {
   const label = {
     image: "图片",
@@ -102,7 +106,11 @@ export class Bridge {
       bin: config.codexBin,
       enabled: config.desktopSyncEnabled === true && Boolean(config.codexAppServerSocket)
     }) : codexDaemon;
-    this.lark = lark ?? new LarkClient({ bin: config.larkBin, spoolRoot: config.eventSpoolDir });
+    this.lark = lark ?? new LarkClient({
+      bin: config.larkBin,
+      profile: config.larkProfile,
+      spoolRoot: config.eventSpoolDir
+    });
     this.state = state ?? new StateStore(config.stateFile);
     this.logger = logger ?? new Logger(config.logFile);
     this.lock = lock ?? new InstanceLock(config.lockFile);
@@ -962,12 +970,17 @@ export class Bridge {
   }
 
   async #handleTurnCompleted({ threadId, turn }) {
-    const watch = this.state.getWatch(threadId);
+    let watch = this.state.getWatch(threadId);
     if (!watch || watch.notified) {
       await this.#releaseCodexThread(threadId);
       return;
     }
-    if (watch.turnId && watch.turnId !== turn.id) return;
+    if (watch.turnId && watch.turnId !== turn.id) {
+      if (this.state.queuedFor(threadId).length === 0) return;
+      this.state.watchThread(threadId, { ...watch, turnId: turn.id });
+      await this.state.save();
+      watch = this.state.getWatch(threadId);
+    }
     await this.#notifyCompletion(threadId, turn.status, watch);
   }
 
@@ -1159,15 +1172,21 @@ export class Bridge {
 
   async #pollWatches() {
     if (!this.codex.ready) return;
-    for (const watch of this.state.activeWatches()) {
+    for (let watch of this.state.activeWatches()) {
       try {
         if (watch.rolloutPath) {
           const rollout = await readRolloutSnapshot(watch.rolloutPath);
+          const hasQueuedMessages = this.state.queuedFor(watch.threadId).length > 0;
+          if (hasQueuedMessages && rollout?.turnId && rollout.turnId !== watch.turnId) {
+            this.state.watchThread(watch.threadId, { ...watch, turnId: rollout.turnId });
+            await this.state.save();
+            watch = this.state.getWatch(watch.threadId);
+          }
           if ((!watch.turnId || rollout?.turnId === watch.turnId) && rollout?.status === "completed") {
-            const thread = await this.#enrichThread(await this.codex.readThread(watch.threadId));
-            await this.#notifyCompletion(watch.threadId, "completed", watch, thread, rollout.result);
+            await this.#notifyCompletion(watch.threadId, "completed", watch, null, rollout.result);
             continue;
           }
+          if (hasQueuedMessages && rollout?.status === "inProgress") continue;
         }
         const thread = await this.#enrichThread(await this.codex.readThread(watch.threadId));
         const turn = latestTurn(thread);
@@ -1181,20 +1200,32 @@ export class Bridge {
   }
 
   async #notifyCompletion(threadId, turnStatus, watch, existingThread, resultOverride = "") {
-    const thread = existingThread ?? await this.#enrichThread(await this.codex.readThread(threadId));
     const next = this.state.queuedFor(threadId)[0];
+    const thread = existingThread ?? await this.#readCompletedThread(threadId);
     if (next) {
-      const turn = await this.codex.sendMessage(threadId, next.text, thread, {
-        clientUserMessageId: next.id,
-        attachments: next.attachments ?? []
-      });
+      let dispatchThread = thread;
+      let turn;
+      try {
+        turn = await this.codex.sendMessage(threadId, next.text, dispatchThread, {
+          clientUserMessageId: next.id,
+          attachments: next.attachments ?? []
+        });
+      } catch (error) {
+        if (!isWriterConflict(error)) throw error;
+        await this.#releaseCodexThread(threadId);
+        dispatchThread = await this.#enrichThread(await this.codex.readThread(threadId));
+        turn = await this.codex.sendMessage(threadId, next.text, dispatchThread, {
+          clientUserMessageId: next.id,
+          attachments: next.attachments ?? []
+        });
+      }
       this.state.shiftQueue(threadId);
       this.state.watchThread(threadId, {
         chatId: next.chatId,
         messageId: next.sourceMessageId,
         senderId: next.senderId,
         turnId: turn.id,
-        rolloutPath: thread.path ?? null
+        rolloutPath: dispatchThread.path ?? null
       });
       await this.state.save();
       await this.#syncDesktopThread(threadId);
@@ -1234,6 +1265,16 @@ export class Bridge {
       this.logger.info("Codex completion notification sent", { threadId, turnStatus });
     } finally {
       await this.#releaseCodexThread(threadId);
+    }
+  }
+
+  async #readCompletedThread(threadId) {
+    try {
+      return await this.#enrichThread(await this.codex.readThread(threadId));
+    } catch (error) {
+      if (!isWriterConflict(error)) throw error;
+      await this.#releaseCodexThread(threadId);
+      return this.#enrichThread(await this.codex.readThread(threadId));
     }
   }
 

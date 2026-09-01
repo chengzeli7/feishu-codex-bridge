@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractVerificationUrl, hasAvailableBot } from "../src/onboarding.mjs";
+import { VERSION } from "../src/version.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const supportRoot = path.join(os.homedir(), "Library", "Application Support", "CodexFeishuBridge");
@@ -72,7 +73,7 @@ async function createFeishuApp() {
 }
 
 async function main() {
-  if (process.platform !== "darwin") throw new Error("v0.1.3 guided installation currently supports macOS only");
+  if (process.platform !== "darwin") throw new Error(`v${VERSION} guided installation currently supports macOS only`);
   await mkdir(supportRoot, { recursive: true, mode: 0o700 });
 
   heading(1, "Check prerequisites");

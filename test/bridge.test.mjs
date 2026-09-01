@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -421,7 +421,7 @@ test("keeps a continuation in the bridge queue while Codex Desktop owns the writ
     assert.equal(bridge.state.isWatching(thread.id), true);
 
     codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
-    await waitFor(() => codex.sent.length === 2);
+    await waitFor(() => codex.sent.length === 3);
     assert.equal(bridge.state.queuedFor(thread.id).length, 1);
 
     codex.sendMessage = async (threadId, text, selectedThread, options) => {
@@ -430,7 +430,7 @@ test("keeps a continuation in the bridge queue while Codex Desktop owns the writ
     };
     codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
     await waitFor(() => bridge.state.queuedFor(thread.id).length === 0);
-    assert.equal(codex.sent.length, 3);
+    assert.equal(codex.sent.length, 4);
     assert.equal(lark.replies.at(-1).content.header.title.content, "排队消息已发送");
   } finally {
     await bridge.stop();
@@ -496,6 +496,124 @@ test("keeps the writer while dispatching the next queued turn", async () => {
     codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
     await waitFor(() => codex.sent.some((item) => item.text === "排队后的下一轮"));
     assert.equal(codex.unsubscribed.length, 0);
+  } finally {
+    await bridge.stop();
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("advances a queued watch and releases a completed Desktop writer before dispatch", async () => {
+  const thread = {
+    id: "019f0000-0000-7000-8000-000000000012",
+    name: "Desktop 后续任务",
+    cwd: "/tmp/project",
+    status: { type: "idle" },
+    turns: [{ id: "turn-new", status: "completed", items: [] }]
+  };
+  const { bridge, codex, lark, tempDir } = await makeBridge(thread, { pollIntervalMs: 20 });
+  const rolloutPath = path.join(tempDir, "rollout.jsonl");
+  let writerOwned = true;
+  codex.readThread = async () => {
+    codex.readCount += 1;
+    if (writerOwned) throw new Error(`thread ${thread.id} already has an active writer`);
+    return thread;
+  };
+  codex.unsubscribeThread = async (threadId) => {
+    codex.unsubscribed.push(threadId);
+    writerOwned = false;
+    return { status: "unsubscribed" };
+  };
+  try {
+    await writeFile(rolloutPath, `${JSON.stringify({
+      timestamp: "2026-08-31T11:07:09Z",
+      type: "turn_context",
+      payload: { turn_id: "turn-new" }
+    })}\n`);
+    bridge.state.enqueue(thread.id, {
+      text: "上一回合结束后继续",
+      chatId: "oc_chat",
+      sourceMessageId: "om_queued_desktop",
+      senderId: "ou_allowed"
+    });
+    bridge.state.watchThread(thread.id, {
+      chatId: "oc_chat",
+      messageId: "om_queued_desktop",
+      senderId: "ou_allowed",
+      turnId: "turn-old",
+      rolloutPath
+    });
+    await bridge.state.save();
+
+    await waitFor(() => bridge.state.getWatch(thread.id)?.turnId === "turn-new");
+    assert.equal(codex.sent.length, 0);
+    assert.equal(codex.unsubscribed.length, 0);
+
+    await writeFile(rolloutPath, [
+      {
+        timestamp: "2026-08-31T11:07:09Z",
+        type: "turn_context",
+        payload: { turn_id: "turn-new" }
+      },
+      {
+        timestamp: "2026-08-31T11:08:09Z",
+        type: "event_msg",
+        payload: { type: "task_complete", turn_id: "turn-new", last_agent_message: "已完成" }
+      }
+    ].map(JSON.stringify).join("\n") + "\n");
+
+    await waitFor(() => bridge.state.queuedFor(thread.id).length === 0);
+    assert.deepEqual(codex.unsubscribed, [thread.id]);
+    assert.equal(codex.sent.length, 1);
+    assert.equal(codex.sent[0].text, "上一回合结束后继续");
+    assert.equal(lark.replies.at(-1).content.header.title.content, "排队消息已发送");
+  } finally {
+    await bridge.stop();
+    await rm(tempDir, { recursive: true, force: true });
+  }
+});
+
+test("retries a queued send after a completed Desktop writer conflict", async () => {
+  const thread = {
+    id: "019f0000-0000-7000-8000-000000000013",
+    name: "Desktop 写入冲突",
+    cwd: "/tmp/project",
+    status: { type: "idle" },
+    turns: [{ id: "turn-completed", status: "completed", items: [] }]
+  };
+  const { bridge, codex, lark, tempDir } = await makeBridge(thread);
+  let writerOwned = true;
+  codex.sendMessage = async (threadId, text, selectedThread, options) => {
+    codex.sent.push({ threadId, text, thread: selectedThread, options });
+    if (writerOwned) throw new Error(`thread ${threadId} already has an active writer`);
+    return { id: "turn-after-release", status: "inProgress", items: [] };
+  };
+  codex.unsubscribeThread = async (threadId) => {
+    codex.unsubscribed.push(threadId);
+    writerOwned = false;
+    return { status: "unsubscribed" };
+  };
+  try {
+    bridge.state.enqueue(thread.id, {
+      text: "释放后继续",
+      chatId: "oc_chat",
+      sourceMessageId: "om_writer_retry",
+      senderId: "ou_allowed"
+    });
+    bridge.state.watchThread(thread.id, {
+      chatId: "oc_chat",
+      messageId: "om_writer_retry",
+      senderId: "ou_allowed",
+      turnId: "turn-completed"
+    });
+    await bridge.state.save();
+
+    codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
+    await waitFor(() => bridge.state.queuedFor(thread.id).length === 0);
+    assert.deepEqual(codex.unsubscribed, [thread.id]);
+    assert.equal(codex.sent.length, 2);
+    assert.equal(codex.sent[0].options.clientUserMessageId, codex.sent[1].options.clientUserMessageId);
+    assert.equal(bridge.state.getWatch(thread.id).turnId, "turn-after-release");
+    assert.equal(lark.replies.at(-1).content.header.title.content, "排队消息已发送");
   } finally {
     await bridge.stop();
     await rm(tempDir, { recursive: true, force: true });

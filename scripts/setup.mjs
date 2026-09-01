@@ -8,6 +8,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
 import { buildBridgeConfig, pairingIdentity, PAIRING_PHRASE } from "../src/setup-config.mjs";
 import { DESKTOP_CODEX_BIN } from "../src/config.mjs";
+import { effectiveProfile } from "../src/onboarding.mjs";
 
 const QUIET_ENV = {
   LARKSUITE_CLI_NO_UPDATE_NOTIFIER: "1",
@@ -27,6 +28,10 @@ function nodeMajorVersion() {
   return Number(process.versions.node.split(".")[0]);
 }
 
+function profileArgs(profile, args) {
+  return profile ? ["--profile", profile, ...args] : args;
+}
+
 async function verifyPrerequisites() {
   if (process.platform !== "darwin") throw new Error("家用安装包当前只支持 macOS");
   if (nodeMajorVersion() < 20) throw new Error(`需要 Node.js 20 或更高版本，当前为 ${process.version}`);
@@ -35,7 +40,14 @@ async function verifyPrerequisites() {
   });
   const larkBin = executable("lark-cli");
   if (!larkBin) throw new Error("未找到 lark-cli，请先按 README.md 安装");
-  const auth = spawnSync(larkBin, ["auth", "status", "--json", "--verify"], {
+  const profileList = spawnSync(larkBin, ["profile", "list"], {
+    encoding: "utf8",
+    env: { ...process.env, ...QUIET_ENV }
+  });
+  if (profileList.status !== 0) throw new Error("无法读取 lark-cli Profile 列表");
+  const larkProfile = effectiveProfile(profileList.stdout);
+  if (!larkProfile) throw new Error("未找到当前生效的 lark-cli Profile");
+  const auth = spawnSync(larkBin, profileArgs(larkProfile, ["auth", "status", "--json", "--verify"]), {
     encoding: "utf8",
     env: { ...process.env, ...QUIET_ENV }
   });
@@ -44,18 +56,18 @@ async function verifyPrerequisites() {
   if (!status.identities?.bot?.available) {
     throw new Error(status.identities?.bot?.message ?? "家庭机器人 bot 身份不可用");
   }
-  return { larkBin };
+  return { larkBin, larkProfile };
 }
 
-function pairWithFeishu(larkBin) {
+function pairWithFeishu(larkBin, larkProfile) {
   return new Promise((resolve, reject) => {
     console.log(`\n请在飞书里打开你创建的机器人。\n看到“配对监听已就绪”后，发送：${PAIRING_PHRASE}\n`);
-    const child = spawn(larkBin, [
+    const child = spawn(larkBin, profileArgs(larkProfile, [
       "event", "consume", "im.message.receive_v1",
       "--max-events", "1",
       "--timeout", "5m",
       "--as", "bot"
-    ], {
+    ]), {
       cwd: projectRoot,
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env, ...QUIET_ENV }
@@ -116,9 +128,9 @@ async function main() {
   if (existsSync(configPath)) {
     throw new Error(`已存在配置，未覆盖：${configPath}\n如需重配，请先手动备份并移走该文件。`);
   }
-  const { larkBin } = await verifyPrerequisites();
-  const pairing = await pairWithFeishu(larkBin);
-  console.log(`已绑定用户 ${pairing.userId.slice(0, 8)}… 和当前私聊。`);
+  const { larkBin, larkProfile } = await verifyPrerequisites();
+  const pairing = await pairWithFeishu(larkBin, larkProfile);
+  console.log(`已绑定 lark-cli Profile ${larkProfile}、用户 ${pairing.userId.slice(0, 8)}… 和当前私聊。`);
 
   const prompt = createPrompt({ input, output });
   try {
@@ -126,7 +138,7 @@ async function main() {
     const defaultAnswer = (await prompt.question(`默认项目（默认 ${workspaceEntries[0].alias}）：`)).trim();
     const defaultWorkspace = defaultAnswer || workspaceEntries[0].alias;
     const detectedFfmpeg = executable("ffmpeg") ?? "/opt/homebrew/bin/ffmpeg";
-    const config = buildBridgeConfig({ pairing, workspaceEntries, defaultWorkspace, larkBin, ffmpegBin: detectedFfmpeg });
+    const config = buildBridgeConfig({ pairing, workspaceEntries, defaultWorkspace, larkBin, larkProfile, ffmpegBin: detectedFfmpeg });
     await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`, { mode: 0o600, flag: "wx" });
     await chmod(configPath, 0o600);
   } finally {
