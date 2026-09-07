@@ -349,7 +349,7 @@ test("lists tasks and sends a completion card", async () => {
   try {
     const list = messageEnvelope({ message_id: "om_list", content: "任务" });
     lark.emit("event", list);
-    await waitFor(() => lark.replies.length === 1);
+    await waitFor(() => lark.replies.length === 1 && list.acknowledged);
     assert.equal(lark.replies[0].content.header.title.content, "Codex 任务");
     assert.equal(list.acknowledged, true);
 
@@ -400,7 +400,7 @@ test("opens structured task detail and updates the same card from Codex events",
       token: "detail-token"
     });
     lark.emit("event", detail);
-    await waitFor(() => lark.updates.length === 1);
+    await waitFor(() => lark.updates.length === 1 && detail.acknowledged);
     assert.match(JSON.stringify(lark.updates[0].content), /详细进展/);
     assert.equal(detail.acknowledged, true);
 
@@ -686,7 +686,7 @@ test("advances a queued watch and releases a completed Desktop writer before dis
       }
     ].map(JSON.stringify).join("\n") + "\n");
 
-    await waitFor(() => bridge.state.queuedFor(thread.id).length === 0);
+    await waitFor(() => bridge.state.queuedFor(thread.id).length === 0 && lark.replies.length === 1);
     assert.deepEqual(codex.unsubscribed, [thread.id]);
     assert.equal(codex.sent.length, 1);
     assert.equal(codex.sent[0].text, "上一回合结束后继续");
@@ -733,7 +733,7 @@ test("retries a queued send after a completed Desktop writer conflict", async ()
     await bridge.state.save();
 
     codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
-    await waitFor(() => bridge.state.queuedFor(thread.id).length === 0);
+    await waitFor(() => bridge.state.queuedFor(thread.id).length === 0 && lark.replies.length === 1);
     assert.deepEqual(codex.unsubscribed, [thread.id]);
     assert.equal(codex.sent.length, 2);
     assert.equal(codex.sent[0].options.clientUserMessageId, codex.sent[1].options.clientUserMessageId);
