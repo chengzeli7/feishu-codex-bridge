@@ -546,7 +546,7 @@ test("keeps a continuation in the bridge queue while Codex Desktop owns the writ
     assert.equal(bridge.state.isWatching(thread.id), true);
 
     codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
-    await waitFor(() => codex.sent.length === 3);
+    await waitFor(() => codex.sent.length === 3 && !bridge.completionLanes.has(thread.id));
     assert.equal(bridge.state.queuedFor(thread.id).length, 1);
 
     codex.sendMessage = async (threadId, text, selectedThread, options) => {
@@ -554,7 +554,7 @@ test("keeps a continuation in the bridge queue while Codex Desktop owns the writ
       return { id: "turn-retried", status: "inProgress", items: [] };
     };
     codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
-    await waitFor(() => bridge.state.queuedFor(thread.id).length === 0);
+    await waitFor(() => bridge.state.queuedFor(thread.id).length === 0 && lark.replies.length === 2);
     assert.equal(codex.sent.length, 4);
     assert.equal(lark.replies.at(-1).content.header.title.content, "排队消息已发送");
   } finally {
