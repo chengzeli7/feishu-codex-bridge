@@ -5,6 +5,23 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { StateStore } from "../src/state-store.mjs";
 
+test("restart quarantines in-flight writes and resets terminal evidence for a new turn", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "bridge-migrate-"));
+  try {
+    const file = path.join(dir, "state.json");
+    await writeFile(file, JSON.stringify({ version: 3, operations: { op: { id: "op", status: "dispatching" } },
+      outbox: { update: { id: "update", status: "held" } } }));
+    const state = new StateStore(file); await state.load();
+    assert.equal(state.state.operations.op.status, "uncertain");
+    assert.equal(state.state.outbox.update.status, "unknown");
+    assert.deepEqual(state.pendingOperations(), []);
+    state.watchThread("thread", { turnId: "old" });
+    state.getWatch("thread").outcome = { turnId: "old", status: "completed" };
+    state.watchThread("thread", { ...state.getWatch("thread"), turnId: "new" });
+    assert.equal(state.getWatch("thread").outcome, null);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("migrates v1 state and serializes concurrent saves", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "bridge-state-"));
   const file = path.join(directory, "state.json");
@@ -12,7 +29,7 @@ test("migrates v1 state and serializes concurrent saves", async () => {
   try {
     const store = new StateStore(file);
     await store.load();
-    assert.equal(store.state.version, 3);
+    assert.equal(store.state.version, 4);
     assert.deepEqual(store.state.queues, {});
     assert.deepEqual(store.state.messageBindings, {});
     store.selectThread("chat", "b");

@@ -5,6 +5,42 @@ import assert from "node:assert/strict";
 import { CodexClient, userInput } from "../src/codex-client.mjs";
 import { VERSION } from "../src/version.mjs";
 
+test("reconciliation pages read-only history and matches clientId exactly", async () => {
+  const client = new CodexClient({});
+  const requests = [];
+  client.request = async (method, params) => {
+    requests.push({ method, params });
+    return params.cursor ? { data: [{ id: "match", items: [{ type: "userMessage", clientId: "request" }] }] } :
+      { data: [{ id: "wrong", items: [{ type: "userMessage", clientId: "request-other" }] }], nextCursor: "page2" };
+  };
+  assert.equal((await client.findTurnByClientId("thread", "request")).id, "match");
+  assert.equal(requests.length, 2);
+  assert.ok(requests.every((item) => item.method === "thread/turns/list"));
+  assert.equal(requests[1].params.cursor, "page2");
+  client.request = async () => ({ data: [], nextCursor: "repeated" });
+  assert.equal(await client.findTurnByClientId("thread", "missing"), null);
+});
+
+test("request errors distinguish unsent writes from uncertain timeouts and RPC rejection", async () => {
+  const socket = new EventEmitter(); socket.readyState = 1; socket.close = () => {};
+  socket.send = (serialized) => {
+    const request = JSON.parse(serialized);
+    if (request.method === "initialize") queueMicrotask(() => socket.emit("message", Buffer.from(JSON.stringify({ id: request.id, result: {} }))));
+    if (request.method === "denied") queueMicrotask(() => socket.emit("message", Buffer.from(JSON.stringify({ id: request.id, error: { code: -32602, message: "invalid input" } }))));
+    if (request.method === "internal") queueMicrotask(() => socket.emit("message", Buffer.from(JSON.stringify({ id: request.id, error: { code: -32603, message: "internal error after dispatch" } }))));
+  };
+  const client = new CodexClient({ socketPath: "/tmp/test.sock", requestTimeoutMs: 20, createWebSocket: () => {
+    queueMicrotask(() => socket.emit("open")); return socket;
+  } });
+  await assert.rejects(client.request("turn/start", {}), (error) => error.requestOutcome === "not_sent");
+  await client.start();
+  try {
+    await assert.rejects(client.request("denied", {}), (error) => error.requestOutcome === "rejected" && error.rpcCode === -32602);
+    await assert.rejects(client.request("internal", {}), (error) => error.requestOutcome === "unknown");
+    await assert.rejects(client.request("turn/start", {}, 20), (error) => error.requestOutcome === "unknown" && error.requestMethod === "turn/start");
+  } finally { await client.stop(); }
+});
+
 test("connects to the shared Desktop app-server over a Unix WebSocket", async () => {
   const sent = [];
   const socket = new EventEmitter();

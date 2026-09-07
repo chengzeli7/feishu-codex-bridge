@@ -3,7 +3,9 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 const EMPTY_STATE = {
-  version: 3,
+  version: 4,
+  outbox: {},
+  submissions: {},
   chats: {},
   watches: {},
   queues: {},
@@ -31,7 +33,10 @@ function migrate(parsed) {
   return {
     ...structuredClone(EMPTY_STATE),
     ...parsed,
-    version: 3,
+    version: 4,
+    outbox: Object.fromEntries(Object.entries(parsed.outbox ?? {}).map(([id, entry]) => [id,
+      entry.status === "held" ? { ...entry, status: "unknown", lastError: "服务在卡片更新期间重启，更新结果待核对" } : entry])),
+    submissions: parsed.submissions ?? {},
     chats,
     watches: parsed.watches ?? {},
     queues: parsed.queues ?? {},
@@ -39,7 +44,7 @@ function migrate(parsed) {
     pendingIntents: parsed.pendingIntents ?? {},
     operations: Object.fromEntries(Object.entries(parsed.operations ?? {}).map(([id, operation]) => [
       id,
-      operation.status === "dispatching" ? { ...operation, status: "queued" } : operation
+      operation.status === "dispatching" ? { ...operation, status: "uncertain", lastError: "服务在提交时重启，等待核对，未自动重放" } : operation
     ])),
     schedules: parsed.schedules ?? {},
     notifications: { ...EMPTY_STATE.notifications, ...(parsed.notifications ?? {}) },
@@ -158,9 +163,11 @@ export class StateStore {
   }
 
   watchThread(threadId, watch) {
+    const previous = this.state.watches[threadId];
     this.state.watches[threadId] = {
-      ...(this.state.watches[threadId] ?? {}),
+      ...(previous ?? {}),
       ...watch,
+      ...(previous?.turnId !== watch.turnId ? { outcome: null } : {}),
       threadId,
       notified: false,
       updatedAt: Date.now()
@@ -193,9 +200,12 @@ export class StateStore {
 
   enqueue(threadId, item, limit = 10) {
     const queue = this.state.queues[threadId] ?? [];
+    const existing = item.requestId && queue.find((entry) => entry.requestId === item.requestId);
+    if (existing) return existing;
     if (queue.length >= limit) throw new Error(`该任务最多保留 ${limit} 条排队消息`);
     const entry = {
       id: randomUUID(),
+      requestId: item.requestId ?? null,
       threadId,
       text: item.text,
       chatId: item.chatId,
@@ -244,7 +254,7 @@ export class StateStore {
 
   allOperations() {
     return Object.values(this.state.operations)
-      .filter((operation) => operation.status === "queued" || operation.status === "dispatching" || operation.status === "failed");
+      .filter((operation) => ["queued", "dispatching", "failed", "uncertain"].includes(operation.status));
   }
 
   updateOperation(id, patch) {

@@ -119,6 +119,33 @@ test("progress card exposes back, continue and stop controls without rename", ()
   assert.equal(completedActions.includes("unwatch"), false);
 });
 
+test("completed progress card prefers the final result over earlier commentary", () => {
+  const completedThread = {
+    ...thread,
+    status: { type: "notLoaded" },
+    rollout: {
+      turnId: "turn-final",
+      status: "completed",
+      progress: "CI 全绿，准备执行合并",
+      result: "PR 已合并，CI 7/7 全绿"
+    },
+    turns: []
+  };
+  const serialized = JSON.stringify(progressCard(completedThread));
+  assert.match(serialized, /最终结果/);
+  assert.match(serialized, /PR 已合并，CI 7\/7 全绿/);
+  assert.doesNotMatch(serialized, /准备执行合并/);
+});
+
+test("task list presents interrupted and unknown rollout states without exposing notLoaded", () => {
+  const interrupted = { ...thread, id: "interrupted", status: { type: "notLoaded" }, rollout: { status: "interrupted" } };
+  const unknown = { ...thread, id: "unknown", status: { type: "notLoaded" }, rollout: { status: "unknown" } };
+  const serialized = JSON.stringify(taskListCard([interrupted, unknown]));
+  assert.match(serialized, /已中断/);
+  assert.match(serialized, /状态未知/);
+  assert.doesNotMatch(serialized, /未载入/);
+});
+
 test("progress detail card renders plans, activity and pagination controls", () => {
   const detail = {
     turnId: "turn",
@@ -182,4 +209,15 @@ test("health card exposes official daemon recovery state", () => {
   const serialized = JSON.stringify(card);
   assert.match(serialized, /修复中/);
   assert.match(serialized, /正在自动拉起官方服务/);
+});
+
+test("health distinguishes a connected service from uncertain submission or delivery", () => {
+  const card = healthCard({ codexReady: true, larkReady: true, pendingDeliveryCount: 2,
+    uncertainDeliveryCount: 1, uncertainSubmissionCount: 3, queuedCount: 0 });
+  assert.equal(card.header.template, "yellow");
+  const text = JSON.stringify(card);
+  assert.match(text, /回复待补发/);
+  assert.match(text, /回复待核对/);
+  assert.match(text, /提交待核对/);
+  assert.match(text, /需要关注/);
 });

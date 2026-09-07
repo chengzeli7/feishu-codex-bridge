@@ -63,18 +63,22 @@ class FakeLark extends EventEmitter {
   }
   startConsumer(eventKey) { queueMicrotask(() => this.emit("ready", eventKey)); }
   async stop() {}
-  async replyCard(messageId, content, idempotencyKey) {
+  async replyCard(messageId, content, idempotencyKey, options) {
     const result = { message_id: `om_bot_${this.replies.length + 1}` };
-    this.replies.push({ type: "card", messageId, content, idempotencyKey, result });
+    this.replies.push({ type: "card", messageId, content, idempotencyKey, result, options });
     return result;
   }
-  async replyMarkdown(messageId, content, idempotencyKey) {
+  async replyMarkdown(messageId, content, idempotencyKey, options) {
     const result = { message_id: `om_bot_${this.replies.length + 1}` };
-    this.replies.push({ type: "markdown", messageId, content, idempotencyKey, result });
+    this.replies.push({ type: "markdown", messageId, content, idempotencyKey, result, options });
     return result;
   }
   async updateCard(token, content) { this.updates.push({ token, content }); }
-  async sendCard(payload) { this.replies.push({ type: "send", ...payload }); }
+  async sendCard(payload) {
+    const result = { message_id: `om_bot_${this.replies.length + 1}` };
+    this.replies.push({ type: "send", ...payload, result });
+    return result;
+  }
 }
 
 class FakeLogger {
@@ -178,6 +182,82 @@ async function makeBridge(thread, { pollIntervalMs = 60_000, codexReady = true, 
   return { bridge, codex, lark, tempDir };
 }
 
+test("a failed reply remains durable without rerunning the accepted task", async () => {
+  const { bridge, codex, lark, tempDir } = await makeBridge(null);
+  const send = lark.replyCard.bind(lark);
+  lark.replyCard = async () => { throw new Error("network timeout"); };
+  try {
+    const envelope = messageEnvelope({ message_id: "om_delivery_failure", content: "请帮我检查当前项目" });
+    lark.emit("event", envelope); await waitFor(() => envelope.acknowledged);
+    assert.equal(codex.created.length, 1);
+    assert.equal(bridge.lastReplyAt, null);
+    const entry = Object.values(bridge.state.state.outbox)[0];
+    assert.equal(entry.status, "pending");
+    lark.emit("event", envelope);
+    entry.retryAt = 0; lark.replyCard = send;
+    await bridge.outbox.drain();
+    assert.equal(codex.created.length, 1);
+    assert.equal(lark.replies.length, 1);
+    assert.equal(entry.status, "delivered");
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+});
+
+test("ambiguous task creation is reconciled by clientId without creating again", async () => {
+  const { bridge, codex, lark, tempDir } = await makeBridge(null, { pollIntervalMs: 20 });
+  let starts = 0; let found = false;
+  codex.createTask = async (input) => {
+    starts += 1; await input.onThreadStarted("thread-recovered");
+    throw Object.assign(new Error("connection dropped"), { requestOutcome: "unknown", requestMethod: "turn/start" });
+  };
+  codex.findTurnByClientId = async () => found ? { id: "turn-recovered", status: "inProgress", items: [] } : null;
+  try {
+    const envelope = messageEnvelope({ message_id: "om_uncertain", content: "请帮我检查当前项目" });
+    lark.emit("event", envelope); await waitFor(() => envelope.acknowledged);
+    assert.equal(lark.replies[0].content.header.title.content, "请求待核对");
+    found = true;
+    await waitFor(() => Object.values(bridge.state.state.submissions)[0].applied);
+    assert.equal(starts, 1);
+    assert.equal(bridge.state.getWatch("thread-recovered").turnId, "turn-recovered");
+    assert.equal(bridge.state.getChat("oc_chat").selectedThreadId, "thread-recovered");
+    assert.ok(lark.replies.some((item) => item.content.header.title.content === "已核对 Codex 请求"));
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+});
+
+test("completion ignores late old events and never substitutes another turn's answer", async () => {
+  const thread = { id: "thread-exact", name: "exact", status: { type: "idle" }, turns: [
+    { id: "current", status: "completed", items: [{ type: "agentMessage", phase: "final_answer", text: "correct final" }] },
+    { id: "other", status: "completed", items: [{ type: "agentMessage", phase: "final_answer", text: "unrelated answer" }] }
+  ] };
+  const { bridge, codex, lark, tempDir } = await makeBridge(thread);
+  try {
+    bridge.state.watchThread(thread.id, { turnId: "current", messageId: "om_source", chatId: "oc_chat" });
+    codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[1] });
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    assert.equal(lark.replies.length, 0);
+    codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
+    codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
+    await waitFor(() => bridge.state.getWatch(thread.id).notified);
+    assert.equal(lark.replies.length, 1);
+    assert.match(JSON.stringify(lark.replies[0].content), /correct final/);
+    assert.doesNotMatch(JSON.stringify(lark.replies[0].content), /unrelated answer/);
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+});
+
+test("an ambiguous card update does not emit a duplicate fallback message", async () => {
+  const { bridge, lark, tempDir } = await makeBridge(null);
+  lark.updateCard = async () => { throw new Error("timeout after accepted update"); };
+  try {
+    const envelope = cardActionEnvelope({ action: "home" });
+    lark.emit("event", envelope); await waitFor(() => envelope.acknowledged);
+    assert.equal(lark.replies.length, 0);
+    assert.equal(Object.values(bridge.state.state.outbox)[0].status, "unknown");
+    lark.updateCard = async () => { throw Object.assign(new Error("expired token"), { deliveryOutcome: "rejected" }); };
+    const retry = cardActionEnvelope({ action: "home" });
+    lark.emit("event", retry); await waitFor(() => retry.acknowledged);
+    assert.equal(lark.replies.length, 1);
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+});
+
 test("keeps automatic Desktop navigation disabled while shared sync is enabled", async () => {
   const { bridge, tempDir } = await makeBridge(null, {
     configOverrides: {
@@ -191,6 +271,51 @@ test("keeps automatic Desktop navigation disabled while shared sync is enabled",
     await bridge.stop();
     await rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test("enabled groups route owner mentions and keep replies in the main chat stream", async () => {
+  const { bridge, codex, lark, tempDir } = await makeBridge(null, { configOverrides: {
+    allowedGroupChatIds: ["oc_group"], botOpenId: "ou_bot"
+  } });
+  try {
+    const group = messageEnvelope({ chat_type: "group", chat_id: "oc_group", content: "@EDITH @Bridge 助手 任务",
+      mentions: [{ id: "ou_bot", name: "EDITH" }, { id: "ou_other", name: "Bridge 助手" }] });
+    lark.emit("event", group);
+    await waitFor(() => group.acknowledged);
+    assert.equal(lark.replies.length, 1);
+    assert.equal(codex.created.length, 0);
+    assert.equal(lark.replies[0].content.header.title.content, "Codex 任务");
+    assert.deepEqual(lark.replies[0].options, { replyInThread: false });
+    assert.equal(bridge.state.getChat("oc_group").chatType, "group");
+    const privateMessage = messageEnvelope(); lark.emit("event", privateMessage);
+    await waitFor(() => privateMessage.acknowledged);
+    assert.deepEqual(lark.replies.at(-1).options, { replyInThread: false });
+    for (const fields of [{ sender_id: "ou_stranger" }, { sender_type: "bot" }, { chat_id: "oc_other" },
+      { mentions: [] }, { mentions: [{ id: "ou_other", name: "EDITH" }] }, { mentions: [{ id: "all" }] }]) {
+      const ignored = messageEnvelope({ ...group.event, message_id: `om_ignored_${Math.random()}`, ...fields });
+      lark.emit("event", ignored); await waitFor(() => ignored.acknowledged);
+    }
+    assert.equal(lark.replies.length, 2);
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+});
+
+test("group card callbacks retain owner and chat authorization and group reply routing", async () => {
+  const { bridge, lark, tempDir } = await makeBridge(null, { configOverrides: {
+    allowedGroupChatIds: ["oc_group"], botOpenId: "ou_bot"
+  } });
+  try {
+    for (const fields of [{ operator_id: "ou_stranger", chat_id: "oc_group" },
+      { operator_id: "ou_allowed", chat_id: "oc_other" }]) {
+      const denied = cardActionEnvelope({ action: "home" }); Object.assign(denied.event, fields);
+      lark.emit("event", denied); await waitFor(() => denied.acknowledged);
+    }
+    assert.equal(lark.updates.length, 0); assert.equal(lark.replies.length, 0);
+    const allowed = cardActionEnvelope({ action: "home", token: null }); allowed.event.chat_id = "oc_group";
+    lark.emit("event", allowed); await waitFor(() => allowed.acknowledged);
+    assert.equal(lark.replies.length, 1);
+    assert.equal(bridge.state.getChat("oc_group").chatType, "group");
+    assert.deepEqual(lark.replies[0].options, { replyInThread: false });
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
 });
 
 test("starts the official daemon before reconnecting the Codex client", async () => {

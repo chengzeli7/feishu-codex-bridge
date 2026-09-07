@@ -18,7 +18,8 @@ Check these in order:
 2. `npm run service -- status` reports the LaunchAgent as running.
 3. `npm run doctor` can reach both Feishu and the local Codex daemon.
 4. The Feishu app version containing the required permissions and events is published.
-5. `allowedUserIds`, `allowedChatIds`, and `requireP2P` match the paired private chat.
+5. `allowedUserIds` and `allowedChatIds` match the paired private chat. For groups,
+   check `allowedGroupChatIds`, `botOpenId`, and an actual mention by the paired owner.
 6. When multiple `lark-cli` apps exist, `larkProfile` points to the intended bot.
 
 After fixing configuration, restart the service:
@@ -42,6 +43,15 @@ of competing for the task. Do not start a second bridge instance.
 process. Upgrade to the latest release and restart the service. If the problem
 continues, collect the timestamp, task ID prefix, and sanitized service logs.
 Do not publish credentials or proprietary task content.
+
+## Health shows an uncertain submission or pending reply
+
+`v0.1.5` distinguishes an unconfirmed submission from a rejected one. Check
+`健康` and `队列` before resending: Codex may already have accepted the task.
+The bridge reconciles exact client IDs in read-only history; if no match can be
+confirmed, it keeps the operation uncertain rather than executing it twice.
+Outgoing replies retry separately and never rerun the task. An expired delivery
+window or uncertain card update requires checking the chat and sanitized logs.
 
 ## A stopped, failed, or archived task cannot continue
 

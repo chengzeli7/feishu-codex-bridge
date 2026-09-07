@@ -10,7 +10,9 @@ const STATUS_LABELS = {
   failed: "失败",
   declined: "已拒绝",
   interrupted: "已中断",
-  pending: "等待中"
+  pending: "等待中",
+  unknown: "状态未知",
+  notLoaded: "状态未知"
 };
 
 function normalizedTimestamp(value) {

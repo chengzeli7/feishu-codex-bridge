@@ -4,6 +4,22 @@ All notable public changes are documented here. This project follows [Semantic V
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-07
+
+- Persists outgoing replies before delivery and retries frozen payloads with
+  stable, collision-resistant delivery keys; uncertain card updates and expired
+  retry windows are surfaced instead of producing duplicate fallback cards.
+- Journals task submissions before execution and reconciles uncertain outcomes
+  against exact client IDs in Codex history, preventing blind replay after a
+  timeout or restart. Recovered submissions restore task bindings and watches.
+- Matches completion notifications to the exact turn and prefers final answers
+  over intermediate progress. Interrupted turns and unavailable live state are
+  reported distinctly instead of being mistaken for completion or loading.
+- Adds opt-in, explicitly allowlisted groups for the paired owner. Messages must
+  mention the current bot; replies go directly to the group stream, not a new topic.
+- Adds pending-delivery and uncertain-submission counts to health diagnostics,
+  state-version-4 migration, and regression coverage for recovery and race conditions.
+
 ## [0.1.4] - 2026-09-01
 
 - Pins every Feishu event consumer, API request, attachment download, and health
@@ -66,7 +82,8 @@ First public beta.
 - Added secret redaction and filtering of raw reasoning, full tool arguments, and full terminal output.
 - Added an interactive setup flow, sanitized offline bundle export, macOS LaunchAgent installer, tests, and Card 2.0 validation.
 
-[Unreleased]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/chengzeli7/feishu-codex-bridge/compare/v0.1.1...v0.1.2

@@ -3,6 +3,7 @@ import { spawn as nodeSpawn } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
+import { deliveryKey } from "./delivery-outbox.mjs";
 
 const QUIET_ENV = {
   LARKSUITE_CLI_NO_UPDATE_NOTIFIER: "1",
@@ -91,19 +92,21 @@ export class LarkClient extends EventEmitter {
     });
   }
 
-  async replyMarkdown(messageId, text, idempotencyKey) {
+  async replyMarkdown(messageId, text, idempotencyKey, { replyInThread = false } = {}) {
     return this.#run([
       "im", "+messages-reply", "--message-id", messageId,
       "--markdown", text, "--as", "bot",
-      "--idempotency-key", idempotencyKey.slice(0, 50)
+      "--idempotency-key", deliveryKey(idempotencyKey),
+      ...(replyInThread ? ["--reply-in-thread"] : [])
     ]);
   }
 
-  async replyCard(messageId, card, idempotencyKey) {
+  async replyCard(messageId, card, idempotencyKey, { replyInThread = false } = {}) {
     return this.#run([
       "im", "+messages-reply", "--message-id", messageId,
       "--msg-type", "interactive", "--content", JSON.stringify(card), "--as", "bot",
-      "--idempotency-key", idempotencyKey.slice(0, 50)
+      "--idempotency-key", deliveryKey(idempotencyKey),
+      ...(replyInThread ? ["--reply-in-thread"] : [])
     ]);
   }
 
@@ -112,7 +115,7 @@ export class LarkClient extends EventEmitter {
     return this.#run([
       "im", "+messages-send", chatId ? "--chat-id" : "--user-id", chatId ?? userId,
       "--msg-type", "interactive", "--content", JSON.stringify(card), "--as", "bot",
-      "--idempotency-key", idempotencyKey.slice(0, 50)
+      "--idempotency-key", deliveryKey(idempotencyKey)
     ]);
   }
 
@@ -254,7 +257,9 @@ export class LarkClient extends EventEmitter {
       }, timeoutMs);
       child.stdout.on("data", (chunk) => { stdout += chunk; });
       child.stderr.on("data", (chunk) => { stderr += chunk; });
-      child.once("error", (error) => finish(() => reject(error)));
+      child.once("error", (error) => finish(() => reject(Object.assign(error, {
+        deliveryOutcome: ["ENOENT", "EACCES"].includes(error.code) ? "not_sent" : "unknown"
+      }))));
       child.once("exit", (code) => {
         finish(() => {
           let parsed;
@@ -265,7 +270,9 @@ export class LarkClient extends EventEmitter {
             return;
           }
           if (code !== 0 || parsed.ok === false) {
-            reject(new Error(parsed.error?.hint ?? parsed.error?.message ?? (stderr.trim() || `lark-cli exited with code ${code}`)));
+            const message = parsed.error?.hint ?? parsed.error?.message ?? (stderr.trim() || `lark-cli exited with code ${code}`);
+            const tokenRejected = /(?:token.{0,30}(?:invalid|expired)|(?:invalid|expired).{0,30}token|token.{0,15}(?:过期|无效))/i.test(parsed.error?.message ?? "");
+            reject(Object.assign(new Error(message), { deliveryOutcome: tokenRejected ? "rejected" : "unknown" }));
             return;
           }
           resolve(parsed.data ?? parsed);

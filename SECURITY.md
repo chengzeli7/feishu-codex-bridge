@@ -22,6 +22,10 @@ Do not include real credentials, private project files, or personal Feishu ident
 - Use a dedicated Feishu app for each Mac.
 - Keep `config.local.json`, `data/`, logs, and `lark-cli` credentials out of source control.
 - Configure exactly one `allowedUserIds` entry and the paired private chat in `allowedChatIds`.
+- Leave `allowedGroupChatIds` empty unless group visibility is intended. Explicitly
+  configured groups still accept commands only from the paired owner mentioning
+  this bot, but every member may see replies, task content, and progress cards.
+  Use the current app's exact `botOpenId`; a display name is not an identity check.
 - Limit `workspaces` to projects the remote user is allowed to access.
 - Keep `approvalPolicy: never` for remotely started turns.
 - Do not expose the local Codex app-server socket over TCP or the public internet.

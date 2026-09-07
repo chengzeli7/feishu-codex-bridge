@@ -74,6 +74,11 @@ export async function readRolloutSnapshot(filePath, {
       current.result = event.payload.last_agent_message?.trim() || current.result;
       current.completedAt = event.payload.completed_at ?? null;
     }
+
+    if (event.type === "event_msg" && event.payload?.type === "turn_aborted" && event.payload.turn_id === current.turnId) {
+      current.status = "interrupted";
+      current.completedAt = event.payload.completed_at ?? event.timestamp ?? null;
+    }
   }
 
   if (!current) return null;

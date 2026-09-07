@@ -37,8 +37,25 @@ test("formats completion", () => {
   assert.match(formatCompletion(completed, "completed"), /已经完成/);
 });
 
-test("labels a thread whose Desktop runtime is not visible", () => {
+test("formats a completed rollout using its final result before commentary", () => {
+  const completed = structuredClone(thread);
+  completed.status = { type: "notLoaded" };
+  completed.rollout = {
+    turnId: "turn-final",
+    status: "completed",
+    progress: "CI 全绿，准备合并",
+    result: "PR 已合并"
+  };
+  const text = formatProgress(completed);
+  assert.match(text, /PR 已合并/);
+  assert.doesNotMatch(text, /准备合并/);
+});
+
+test("describes a thread whose Desktop runtime is not visible without exposing internal notLoaded state", () => {
   const unloaded = structuredClone(thread);
   unloaded.status = { type: "notLoaded" };
-  assert.match(formatProgress(unloaded), /无法确认另一个 Codex Desktop 进程中的实时运行状态/);
+  const text = formatProgress(unloaded);
+  assert.match(text, /状态未知/);
+  assert.match(text, /只展示已保存的任务记录/);
+  assert.doesNotMatch(text, /未载入/);
 });

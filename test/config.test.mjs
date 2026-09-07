@@ -12,6 +12,8 @@ test("loads and resolves a valid single-user configuration", async () => {
   try {
     const config = await loadConfig(file);
     assert.equal(config.requireP2P, true);
+    assert.deepEqual(config.allowedGroupChatIds, []);
+    assert.equal(config.botOpenId, null);
     assert.equal(config.desktopSyncEnabled, false);
     assert.equal(config.desktopAutoOpenEnabled, false);
     assert.equal(config.larkProfile, null);

@@ -9,7 +9,7 @@ the remote interface; Codex Desktop remains the execution environment.
 
 ## Components
 
-### Feishu private chat
+### Feishu private chat or explicitly allowed group
 
 Receives the user's messages, attachments, and Card 2.0 actions. It also renders
 task dashboards, progress snapshots, queues, schedules, health, and completion notifications.
@@ -18,7 +18,7 @@ task dashboards, progress snapshots, queues, schedules, health, and completion n
 
 A per-user macOS LaunchAgent consumes Feishu events and owns:
 
-- sender, private-chat, and workspace validation;
+- sender, chat, bot-mention, and workspace validation;
 - natural-language and exact-command routing;
 - event deduplication and durable spooling;
 - follow-up queues and local schedules;
@@ -38,7 +38,7 @@ language aliases help routing but never grant access to additional directories.
 
 ## Task lifecycle
 
-1. The bridge validates the Feishu sender and private chat.
+1. The bridge validates the Feishu sender and chat; group messages must mention this bot.
 2. It resolves the target workspace or existing Codex task.
 3. It submits the turn through the shared local app-server.
 4. Progress snapshots are filtered and rendered as Feishu cards.
@@ -55,6 +55,22 @@ Incoming events are deduplicated before execution. Events, queued operations,
 schedules, and task mappings are persisted locally so a bridge restart does not
 silently lose accepted work. A single-instance lock prevents two local bridge
 processes from consuming the same app configuration.
+
+State version 4 also persists outgoing payloads and submission attempts:
+
+- Replies are frozen before sending and retried with the same delivery key.
+  Retry windows are bounded; uncertain card updates are held for verification
+  instead of sending an extra fallback card.
+- A task submission is recorded before the app-server call. If its outcome is
+  unknown, exact client-ID matches in read-only turn history can restore the
+  accepted task and its watch. No match does not mean rejection: uncertain work
+  is not automatically submitted again.
+- Completion is tied to the exact turn and its terminal evidence. Final answers
+  take precedence over commentary; health diagnostics show pending deliveries
+  and submissions that still need verification.
+
+These safeguards reduce duplicate work and missed replies; they are not an
+unconditional exactly-once guarantee across external services or a cloud relay.
 
 ## Why no MCP server is required
 

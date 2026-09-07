@@ -11,13 +11,13 @@ Codex Desktop tasks from a Feishu or Lark private chat.
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.4-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.5-orange.svg)](CHANGELOG.md)
 
 </div>
 
 ![Feishu Codex Bridge connects a private chat to Codex Desktop running on your Mac](docs/images/hero.png)
 
-> **Public beta:** `v0.1.4` uses local app-server capabilities currently bundled
+> **Public beta:** `v0.1.5` uses local app-server capabilities currently bundled
 > with Codex Desktop. A future Codex update may require a compatibility update.
 
 ## What problem does it solve?
@@ -53,13 +53,17 @@ of a real user or repository. Open the full-size frames:
 The bridge also supports images, files, short voice messages, durable follow-up
 queues, completion watches, and one-time, daily, or weekly local schedules.
 
+Replies are saved before delivery and retried with the same delivery key after
+temporary failures. An uncertain task submission is checked against Codex history
+instead of being blindly submitted again. See [recovery details](docs/ARCHITECTURE.md#local-state-and-recovery).
+
 ## Is it for you?
 
 | A good fit when you… | Choose something else when you… |
 |---|---|
 | use Codex Desktop regularly on a personal Mac | need Linux, Windows, or an always-on cloud runner |
 | want to check or continue tasks from your phone | need full screen, mouse, or keyboard control |
-| want code and credentials to stay local | need a shared multi-user or group-chat bot |
+| want code and credentials to stay local | need a shared multi-user bot |
 | are comfortable allowlisting specific projects | need unrestricted filesystem access |
 
 ## How it works
@@ -115,7 +119,7 @@ and project files. It does not change global Git configuration.
 
 ## Safety by design
 
-- **Single user and private chat:** only the paired user and chat are accepted.
+- **Single owner:** private chat by default; optional allowlisted groups accept only the paired owner's messages that mention this bot.
 - **Workspace allowlist:** new tasks can start only in configured project paths.
 - **No remote approval bypass:** Feishu-started turns use `approvalPolicy: never`.
 - **Local credentials:** Feishu secrets and Codex credentials never belong in the repository.
@@ -131,7 +135,7 @@ Review [SECURITY.md](SECURITY.md) before deployment.
 |---|---|
 | macOS | Linux and Windows |
 | One allowlisted Feishu user | Multiple users |
-| Private bot chat | Group chat |
+| Private bot chat and opt-in owner-only groups | Commands from other group members |
 | Codex runtime bundled with ChatGPT Desktop | Cloud-hosted Codex routing |
 | Allowlisted local workspaces | Arbitrary directory access |
 
@@ -159,7 +163,7 @@ card and command localization is planned for a later release.
 | Operating system | macOS |
 | Codex | Runtime bundled with ChatGPT Desktop |
 | Node.js | 20, 22, and 24 are covered by CI |
-| Feishu/Lark | Custom app, bot capability, private chat |
+| Feishu/Lark | Custom app, bot capability, private chat; optional allowlisted groups |
 | `lark-cli` | Bundled dependency, currently `1.0.89` |
 
 ## Frequently asked questions
@@ -188,7 +192,7 @@ card and command localization is planned for a later release.
   <tr>
     <td width="50%" valign="top">
       <strong>Does group chat work?</strong><br><br>
-      Not yet. The current single-user security model accepts only the paired private chat.
+      Optional, not shared access. Explicitly allowlist a group and configure the bot ID; only the paired owner can send commands by mentioning this bot. Replies stay in the group stream. See <a href="docs/CONFIGURATION.md#optional-owner-only-groups">configuration</a>.
     </td>
     <td width="50%" valign="top">
       <strong>What if Codex needs approval?</strong><br><br>

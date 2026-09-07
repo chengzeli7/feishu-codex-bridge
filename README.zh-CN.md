@@ -11,13 +11,13 @@
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.4-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.5-orange.svg)](CHANGELOG.md)
 
 </div>
 
 ![Feishu Codex Bridge 将飞书私聊连接到运行在个人 Mac 上的 Codex Desktop](docs/images/hero.png)
 
-> **公开 Beta：** 当前版本为 `v0.1.4`。项目依赖 Codex Desktop 现有的本地
+> **公开 Beta：** 当前版本为 `v0.1.5`。项目依赖 Codex Desktop 现有的本地
 > app-server 能力，后续 Codex 更新可能需要同步进行兼容性适配。
 
 ## 它解决什么问题？
@@ -52,13 +52,16 @@ Feishu Codex Bridge 把机器人私聊变成一个轻量的任务控制台：
 此外还支持图片、文件、短语音、持久化消息队列、完成关注，以及一次性、
 每日或每周在本机执行的定时任务。
 
+回复会先保存再发送，短暂发送失败后使用同一个发送标识补发；任务提交结果不确定时，
+先核对 Codex 历史，不盲目重复执行。详见[恢复机制](docs/ARCHITECTURE.zh-CN.md#本机状态与恢复)。
+
 ## 它适合你吗？
 
 | 适合这些情况 | 建议选择其他方案 |
 |---|---|
 | 经常在个人 Mac 上使用 Codex Desktop | 需要 Linux、Windows 或持续在线的云端执行器 |
 | 希望从手机查看或继续任务 | 需要完整控制屏幕、鼠标或键盘 |
-| 希望代码和凭据留在本机 | 需要多人共享或群聊机器人 |
+| 希望代码和凭据留在本机 | 需要多人共享的机器人 |
 | 可以明确配置允许访问的项目 | 需要不受限制地访问任意目录 |
 
 ## 工作原理
@@ -112,7 +115,7 @@ Codex 会自动下载项目、选择持久化 Node.js 运行时、执行引导�
 
 ## 安全边界
 
-- **单用户私聊：** 只接受完成配对的用户和私聊会话。
+- **单用户控制：** 默认使用配对私聊；可选群聊白名单，但只接受配对用户 @ 当前机器人的消息。
 - **项目白名单：** 新任务只能进入明确配置的项目目录。
 - **不绕过审批：** 飞书创建的回合使用 `approvalPolicy: never`。
 - **凭据保留本地：** 飞书和 Codex 凭据不会写入仓库。
@@ -128,7 +131,7 @@ Codex 会自动下载项目、选择持久化 Node.js 运行时、执行引导�
 |---|---|
 | macOS | Linux 和 Windows |
 | 单个白名单飞书用户 | 多用户 |
-| 机器人私聊 | 群聊 |
+| 机器人私聊、可选的单用户控制群聊 | 其他群成员发送控制指令 |
 | ChatGPT Desktop 内置 Codex 运行时 | 云端 Codex 路由 |
 | 明确配置的本地项目 | 任意目录访问 |
 
@@ -155,7 +158,7 @@ Mac 必须保持唤醒并联网。睡眠或关机后无法处理消息，因为�
 | 操作系统 | macOS |
 | Codex | ChatGPT Desktop 内置运行时 |
 | Node.js | CI 覆盖 20、22 和 24 |
-| 飞书/Lark | 企业自建应用、机器人能力、私聊 |
+| 飞书/Lark | 企业自建应用、机器人能力、私聊；可选白名单群聊 |
 | `lark-cli` | 项目内置依赖，当前为 `1.0.89` |
 
 ## 常见问题
@@ -184,7 +187,7 @@ Mac 必须保持唤醒并联网。睡眠或关机后无法处理消息，因为�
   <tr>
     <td width="50%" valign="top">
       <strong>支持群聊吗？</strong><br><br>
-      暂不支持。当前单用户安全模型只接受完成配对的机器人私聊。
+      可以按需开启，但不是多人共享。明确配置群白名单和机器人 ID 后，只接受配对用户 @ 当前机器人的指令，回复直接进入群消息流。见<a href="docs/CONFIGURATION.zh-CN.md#可选的单用户控制群聊">配置说明</a>。
     </td>
     <td width="50%" valign="top">
       <strong>Codex 需要审批怎么办？</strong><br><br>

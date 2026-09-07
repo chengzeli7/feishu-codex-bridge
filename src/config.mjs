@@ -1,10 +1,13 @@
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { validateGroupConfig } from "./group-policy.mjs";
 
 const DEFAULTS = {
   allowedUserIds: [],
   allowedChatIds: [],
+  allowedGroupChatIds: [],
+  botOpenId: null,
   requireP2P: true,
   workspaces: {},
   workspaceAliases: {},
@@ -37,6 +40,7 @@ export async function loadConfig(configPath = process.env.BRIDGE_CONFIG ?? "./co
   const absolutePath = path.resolve(configPath);
   const raw = JSON.parse(await readFile(absolutePath, "utf8"));
   const config = { ...DEFAULTS, ...raw };
+  validateGroupConfig(config);
 
   if (!Array.isArray(config.allowedUserIds) || config.allowedUserIds.length !== 1) {
     throw new Error("allowedUserIds must contain exactly one Feishu open_id in single-user mode");

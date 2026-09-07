@@ -64,3 +64,24 @@ test("infers the current turn when a large rollout tail excludes turn context", 
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("maps an aborted rollout turn to interrupted instead of leaving it unloaded", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "rollout-monitor-aborted-"));
+  const file = path.join(dir, "rollout.jsonl");
+  const events = [
+    { timestamp: "2026-09-01T10:18:44Z", type: "event_msg", payload: { type: "item_completed", turn_id: "turn-aborted" } },
+    { timestamp: "2026-09-01T10:18:45Z", type: "response_item", payload: { type: "message", role: "assistant", phase: "commentary", content: [{ type: "output_text", text: "正在复测" }] } },
+    { timestamp: "2026-09-01T10:19:03Z", type: "event_msg", payload: { type: "turn_aborted", turn_id: "turn-aborted", reason: "interrupted", completed_at: 1_788_257_943 } }
+  ];
+  await writeFile(file, `${events.map(JSON.stringify).join("\n")}\n`);
+
+  try {
+    const snapshot = await readRolloutSnapshot(file, { now: Date.parse("2026-09-02T10:19:03Z") });
+    assert.equal(snapshot.turnId, "turn-aborted");
+    assert.equal(snapshot.status, "interrupted");
+    assert.equal(snapshot.progress, "正在复测");
+    assert.equal(snapshot.completedAt, 1_788_257_943);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

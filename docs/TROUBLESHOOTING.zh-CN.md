@@ -18,7 +18,8 @@ npm run service -- logs
 2. `npm run service -- status` 显示 LaunchAgent 正在运行。
 3. `npm run doctor` 可以连接飞书和本机 Codex daemon。
 4. 包含所需权限和事件的飞书应用版本已经发布。
-5. `allowedUserIds`、`allowedChatIds` 和 `requireP2P` 与配对私聊一致。
+5. `allowedUserIds`、`allowedChatIds` 与配对私聊一致；群聊还需要检查
+   `allowedGroupChatIds`、`botOpenId`，以及是否由配对用户真正 @ 当前机器人。
 6. 本机存在多个 `lark-cli` 应用时，`larkProfile` 指向目标机器人。
 
 修正配置后重启服务：
@@ -40,6 +41,14 @@ npm run service -- restart
 `v0.1.3` 已修复另一个 Desktop 进程持有未加载任务时的误报失败。请升级到最新版本并
 重启服务。如果问题仍然存在，请记录时间、任务 ID 前缀和脱敏后的服务日志，不要公开
 凭据或私有任务内容。
+
+## 健康检查显示待核对提交或待发送回复
+
+`v0.1.5` 会区分“提交结果不确定”和“明确拒绝”。不要直接重复发送，先查看
+`健康` 和 `队列`，因为 Codex 可能已经接收任务。Bridge 会只读核对历史中的
+精确 client ID；不能确认时保留待核对，不会自动执行第二次。
+回复补发独立于任务执行，不会重新运行任务。补发窗口过期或卡片更新结果不确定时，
+需要结合聊天记录和脱敏日志确认。
 
 ## 已停止、失败或归档的任务无法继续
 

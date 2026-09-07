@@ -116,12 +116,13 @@ export function statusLabel(status) {
   return {
     active: "进行中",
     idle: "空闲/已结束",
-    notLoaded: "未载入",
+    notLoaded: "状态未知",
     systemError: "系统错误",
     completed: "已完成",
     interrupted: "已中断",
     failed: "失败",
-    inProgress: "进行中"
+    inProgress: "进行中",
+    unknown: "状态未知"
   }[type] ?? type ?? "未知";
 }
 

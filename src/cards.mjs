@@ -43,6 +43,9 @@ function threadUpdatedAt(thread) {
 export function effectiveStatus(thread) {
   if (thread.rollout?.status === "inProgress") return { label: "运行中 · Desktop", color: "blue", template: "blue" };
   if (thread.rollout?.status === "completed") return { label: "已完成", color: "green", template: "green" };
+  if (thread.rollout?.status === "interrupted") return { label: "已中断", color: "grey", template: "grey" };
+  if (thread.rollout?.status === "failed") return { label: "执行失败", color: "red", template: "red" };
+  if (thread.rollout?.status === "unknown") return { label: "状态未知", color: "grey", template: "grey" };
   const type = thread.status?.type ?? thread.status;
   if (type === "active" || type === "inProgress") return { label: "正在运行", color: "blue", template: "blue" };
   if (type === "completed" || type === "idle") return { label: "已完成", color: "green", template: "green" };
@@ -218,7 +221,10 @@ export function createTaskFormCard(workspaces, defaultWorkspace) {
 export function progressCard(thread, { watching = false, queue = [] } = {}) {
   const status = effectiveStatus(thread);
   const turn = latestTurn(thread);
-  const progress = thread.rollout?.progress || thread.rollout?.result || latestAgentMessage(thread) || "尚未产生可展示的进展。";
+  const progress = thread.rollout?.status === "completed" ?
+    thread.rollout?.result || latestAgentMessage(thread) || thread.rollout?.progress :
+    thread.rollout?.progress || thread.rollout?.result || latestAgentMessage(thread);
+  const displayProgress = progress || "尚未产生可展示的进展。";
   const project = thread.cwd ? path.basename(thread.cwd) : "未知";
   const active = status.label.includes("运行");
   const completed = status.label === "已完成";
@@ -264,8 +270,8 @@ export function progressCard(thread, { watching = false, queue = [] } = {}) {
       {
         tag: "collapsible_panel", expanded: true, background_color: "grey-50",
         border: { color: "grey-100", corner_radius: "8px" }, padding: "8px",
-        header: { title: plain("最近进展") },
-        elements: [{ tag: "markdown", content: safeMarkdown(truncate(progress, 1800)) }]
+        header: { title: plain(completed ? "最终结果" : "最近进展") },
+        elements: [{ tag: "markdown", content: safeMarkdown(truncate(displayProgress, 1800)) }]
       },
       actionRow(buttons),
       actionRow(managementButtons)
@@ -445,7 +451,8 @@ export function completionCard(thread, turnStatus, result = "") {
 }
 
 export function healthCard(health) {
-  const ok = health.codexReady && health.larkReady;
+  const ok = health.codexReady && health.larkReady && !health.pendingDeliveryCount &&
+    !health.uncertainDeliveryCount && !health.uncertainSubmissionCount;
   const recovering = !health.codexReady && health.codexRecovery?.recovering;
   const codexStatus = health.codexReady ? "正常" : recovering ? "修复中" : "断开";
   const recoveryStatus = health.codexReady ? "官方服务已连接" :
@@ -468,6 +475,9 @@ export function healthCard(health) {
         { is_short: true, text: { tag: "lark_md", content: `**最近回复**\n${timeLabel(health.lastReplyAt)}` } },
         { is_short: true, text: { tag: "lark_md", content: `**关注任务**\n${health.watchCount}` } },
         { is_short: true, text: { tag: "lark_md", content: `**自动恢复**\n${safeMarkdown(recoveryStatus)}` } },
+        { is_short: true, text: { tag: "lark_md", content: `**回复待补发**\n${health.pendingDeliveryCount ?? 0}` } },
+        { is_short: true, text: { tag: "lark_md", content: `**回复待核对**\n${health.uncertainDeliveryCount ?? 0}` } },
+        { is_short: true, text: { tag: "lark_md", content: `**提交待核对**\n${health.uncertainSubmissionCount ?? 0}` } },
         { is_short: false, text: { tag: "lark_md", content: `**最近错误**\n${safeMarkdown(health.lastError ?? "无")}` } }
       ] },
       actionRow([buttonColumn("刷新", "health", {}, { primary: true }), buttonColumn("任务首页", "home", {})])
@@ -483,7 +493,9 @@ export function queueCard(items, titleLookup = new Map(), operations = []) {
   }).join("\n\n");
   const operationContent = operations.length === 0 ? "<font color='grey'>没有等待 Codex 重连的操作。</font>" : operations.map((item, index) => {
     const label = item.type === "create" ? "新建任务" : "继续任务";
-    return `**${index + 1}. ${label} · ${safeMarkdown(item.workspace ?? item.threadId?.slice(0, 8) ?? "未知")}**\n${safeMarkdown(truncate(item.text, 180))}\n<font color='grey'>${item.status === "failed" ? `失败：${safeMarkdown(item.lastError ?? "未知错误")}` : "等待自动恢复"}</font>`;
+    const status = item.status === "uncertain" ? "提交结果待核对，未自动重放" :
+      item.status === "failed" ? `失败：${safeMarkdown(item.lastError ?? "未知错误")}` : "等待自动恢复";
+    return `**${index + 1}. ${label} · ${safeMarkdown(item.workspace ?? item.threadId?.slice(0, 8) ?? "未知")}**\n${safeMarkdown(truncate(item.text, 180))}\n<font color='grey'>${status}</font>`;
   }).join("\n\n");
   const total = items.length + operations.length;
   return baseCard({

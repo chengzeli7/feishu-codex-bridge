@@ -5,6 +5,8 @@
   "allowedChatIds": [
     "oc_replace_with_your_chat_id"
   ],
+  "allowedGroupChatIds": [],
+  "botOpenId": null,
   "requireP2P": true,
   "workspaces": {
     "my-project": "/absolute/path/to/my-project"

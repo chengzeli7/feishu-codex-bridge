@@ -99,17 +99,21 @@ export class CodexClient extends EventEmitter {
 
   request(method, params = {}) {
     if (!this.#isWritable()) {
-      return Promise.reject(new Error("Codex app-server is not running"));
+      return Promise.reject(Object.assign(new Error("Codex app-server is not running"), { requestOutcome: "not_sent", requestMethod: method }));
     }
     const id = this.nextId++;
     const payload = { id, method, params };
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`Codex request timed out: ${method}`));
+        reject(Object.assign(new Error(`Codex request timed out: ${method}`), { requestOutcome: "unknown", requestMethod: method }));
       }, this.requestTimeoutMs);
       this.pending.set(id, { resolve, reject, timer, method });
-      this.#write(payload);
+      try { this.#write(payload); } catch (error) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(Object.assign(error, { requestOutcome: "unknown", requestMethod: method }));
+      }
     });
   }
 
@@ -149,6 +153,24 @@ export class CodexClient extends EventEmitter {
   async readThread(threadId) {
     const result = await this.#retryThreadStoreRequest(() => this.request("thread/read", { threadId, includeTurns: true }));
     return result.thread;
+  }
+
+  async findTurnByClientId(threadId, clientId) {
+    let cursor = null;
+    const seen = new Set();
+    for (let page = 0; page < 50; page += 1) {
+      const result = await this.request("thread/turns/list", {
+        threadId, limit: 30, cursor, sortDirection: "desc", itemsView: "summary"
+      });
+      const match = (result.data ?? []).find((turn) => (turn.items ?? []).some((item) =>
+        item.type === "userMessage" && item.clientId === clientId));
+      if (match) return match;
+      cursor = result.nextCursor;
+      if (!cursor || seen.has(cursor)) return null;
+      seen.add(cursor);
+    }
+    // Not found is not proof that a submission failed; callers keep it pending.
+    return null;
   }
 
   async listThreadItems(threadId, {
@@ -325,7 +347,13 @@ export class CodexClient extends EventEmitter {
       clearTimeout(pending.timer);
       this.pending.delete(message.id);
       if (message.error) {
-        pending.reject(new Error(message.error.message ?? JSON.stringify(message.error)));
+        const detail = message.error.message ?? JSON.stringify(message.error);
+        // Internal/server errors are not proof that a write had no side effect.
+        const rejected = [-32700, -32600, -32601, -32602].includes(message.error.code) ||
+          /already has an active writer|expectedTurnId|permission denied|approval required/i.test(detail);
+        pending.reject(Object.assign(new Error(detail), {
+          requestOutcome: rejected ? "rejected" : "unknown", requestMethod: pending.method, rpcCode: message.error.code
+        }));
       } else {
         pending.resolve(message.result);
       }
@@ -366,7 +394,7 @@ export class CodexClient extends EventEmitter {
   #rejectPending(reason) {
     for (const pending of this.pending.values()) {
       clearTimeout(pending.timer);
-      pending.reject(reason);
+      pending.reject(Object.assign(new Error(reason.message), { requestOutcome: "unknown", requestMethod: pending.method }));
     }
     this.pending.clear();
   }

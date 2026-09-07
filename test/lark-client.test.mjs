@@ -8,6 +8,34 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { LarkClient } from "../src/lark-client.mjs";
 
+test("all delivery methods preserve distinct long identities", async () => {
+  const keys = [];
+  const lark = new LarkClient({ spawn(_bin, args) {
+    keys.push(args[args.indexOf("--idempotency-key") + 1]);
+    const child = new EventEmitter(); child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.kill = () => {};
+    queueMicrotask(() => { child.stdout.write(JSON.stringify({ ok: true, data: { message_id: "om_test" } })); child.emit("exit", 0); });
+    return child;
+  } });
+  const prefix = "done-00000000-0000-7000-8000-000000000001-00000002-";
+  await lark.replyCard("om_source", {}, `${prefix}first`);
+  await lark.replyMarkdown("om_source", "text", `${prefix}second`);
+  await lark.sendCard({ chatId: "chat", card: {}, idempotencyKey: `${prefix}third` });
+  assert.equal(new Set(keys).size, 3);
+  assert.ok(keys.every((key) => key.length <= 50));
+});
+
+test("only explicit token rejection permits a fallback card", async () => {
+  let message = "card token expired";
+  const lark = new LarkClient({ spawn() {
+    const child = new EventEmitter(); child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.kill = () => {};
+    queueMicrotask(() => { child.stderr.write(JSON.stringify({ ok: false, error: { message } })); child.emit("exit", 1); });
+    return child;
+  } });
+  await assert.rejects(lark.updateCard("token", {}), (error) => error.deliveryOutcome === "rejected");
+  message = "connection lost";
+  await assert.rejects(lark.updateCard("token", {}), (error) => error.deliveryOutcome === "unknown");
+});
+
 function waitFor(predicate, timeoutMs = 1_000) {
   return new Promise((resolve, reject) => {
     const started = Date.now();
@@ -154,4 +182,20 @@ test("pins event consumers and API requests to one lark profile", async () => {
     await lark.stop();
     await rm(spoolRoot, { recursive: true, force: true });
   }
+});
+
+test("thread replies are explicit and preserve the default private reply behavior", async () => {
+  const calls = [];
+  const lark = new LarkClient({ spawn(_command, args) {
+    calls.push(args);
+    const child = new EventEmitter();
+    child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.kill = () => true;
+    queueMicrotask(() => { child.stdout.end('{"ok":true,"data":{}}'); child.emit("exit", 0); });
+    return child;
+  } });
+  await lark.replyMarkdown("om_private", "hello", "private");
+  await lark.replyCard("om_private", {}, "private-card");
+  await lark.replyMarkdown("om_group", "hello", "group", { replyInThread: true });
+  await lark.replyCard("om_group", {}, "group-card", { replyInThread: true });
+  assert.deepEqual(calls.map((args) => args.includes("--reply-in-thread")), [false, false, true, true]);
 });

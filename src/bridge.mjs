@@ -1,5 +1,6 @@
 import path from "node:path";
 import { loadConfig } from "./config.mjs";
+import { isAllowedGroup, isMentionedGroupMessage, stripGroupMentionPrefix } from "./group-policy.mjs";
 import { CodexClient, latestTurn } from "./codex-client.mjs";
 import { LarkClient } from "./lark-client.mjs";
 import { parseCommand, resolveThreadId, threadTitle, truncate } from "./commands.mjs";
@@ -7,6 +8,9 @@ import { detectWorkspace, routeNaturalMessage } from "./intent-router.mjs";
 import { AttachmentManager, eventHasResources } from "./attachment-manager.mjs";
 import { nextScheduleRun, parseScheduleExpression, scheduleLabel } from "./scheduler.mjs";
 import { StateStore } from "./state-store.mjs";
+import { DeliveryOutbox, deliveryKey } from "./delivery-outbox.mjs";
+import { SubmissionJournal, SubmissionPendingError } from "./submission-journal.mjs";
+import { confirmedOutcome, finalAnswer, outcomeText } from "./turn-outcome.mjs";
 import { VERSION } from "./version.mjs";
 import { readRolloutSnapshot } from "./rollout-monitor.mjs";
 import { ProgressTracker } from "./progress-tracker.mjs";
@@ -90,7 +94,7 @@ function mediaFallback(event) {
 
 function normalizedEventContent(event, transcript, hasAttachments) {
   if (transcript) return transcript.trim();
-  const content = String(event.content ?? "").trim();
+  const content = stripGroupMentionPrefix(event);
   if (!hasAttachments) return content;
   if (!content || /^(?:!\[[^\]]*\]\([^)]+\)|<(?:file|audio|media)\b[^>]*>|\[(?:图片|文件|语音|视频)\])$/i.test(content)) {
     return mediaFallback(event);
@@ -113,6 +117,10 @@ export class Bridge {
     });
     this.state = state ?? new StateStore(config.stateFile);
     this.logger = logger ?? new Logger(config.logFile);
+    this.outbox = new DeliveryOutbox({ state: this.state, lark: this.lark, logger: this.logger,
+      onDelivered: () => { this.lastReplyAt = Date.now(); } });
+    this.submissions = new SubmissionJournal({ state: this.state, codex: this.codex, logger: this.logger });
+    this.completionLanes = new Map();
     this.lock = lock ?? new InstanceLock(config.lockFile);
     this.desktopSync = desktopSync ?? new DesktopSync({ enabled: config.desktopAutoOpenEnabled === true });
     this.attachments = attachments ?? new AttachmentManager({
@@ -356,6 +364,7 @@ export class Bridge {
       this.#validateCreate(command);
       if (!this.codex.ready) {
         const operation = this.state.enqueueOperation({
+          id: this.#submissionId(event),
           type: "create",
           workspace: command.workspace,
           text: command.message,
@@ -382,6 +391,7 @@ export class Bridge {
       const threadId = resolveThreadId(command.selector, this.state.getChat(event.chat_id), []);
       if (!threadId) throw new Error("当前没有选中的任务，请先发送“任务”并打开一条任务");
       const operation = this.state.enqueueOperation({
+        id: this.#submissionId(event),
         type: "send",
         threadId,
         text: command.message,
@@ -494,19 +504,22 @@ export class Bridge {
     this.#validateCreate(command);
     const workspace = this.config.workspaces[command.workspace];
     const name = truncate(command.message.split("\n")[0].replaceAll(/\s+/g, " ").trim(), 64);
-    const created = await this.codex.createTask({
+    const submissionId = operation?.id ?? this.#submissionId(event);
+    const existingThreadId = operation?.threadId ?? this.state.state.submissions[submissionId]?.threadId ?? null;
+    const context = { type: "create", threadId: existingThreadId, cwd: workspace, name, event, attachments, background, operationId: operation?.id };
+    const created = await this.submissions.submit(submissionId, context, (recordThread) => this.codex.createTask({
       cwd: workspace,
       prompt: command.message,
       name,
       effort: command.effort ?? "default",
       attachments,
-      clientUserMessageId: operation?.id ?? event.message_id ?? null,
-      existingThreadId: operation?.threadId ?? null,
-      onThreadStarted: operation ? async (threadId) => {
-        this.state.updateOperation(operation.id, { threadId });
-        await this.state.save();
-      } : null
-    });
+      clientUserMessageId: submissionId,
+      existingThreadId,
+      onThreadStarted: async (threadId) => {
+        await recordThread(threadId);
+        if (operation) { this.state.updateOperation(operation.id, { threadId }); await this.state.save(); }
+      }
+    }));
     const thread = { ...created.thread, cwd: workspace, status: { type: "active" }, turns: [created.turn] };
     if (!background) this.state.selectThread(event.chat_id, thread.id);
     const recentIds = this.state.getChat(event.chat_id).recentThreadIds ?? [];
@@ -515,16 +528,20 @@ export class Bridge {
     this.#watchThread(thread, event, created.turn.id);
     await this.state.save();
     await this.#syncDesktopThread(thread.id);
+    await this.submissions.applied(submissionId);
     return card(progressCard(thread, { watching: true, queue: [] }), { threadId: thread.id });
   }
 
-  async #sendTaskNow(command, event, threadId, thread, attachments = []) {
+  async #sendTaskNow(command, event, threadId, thread, attachments = [], operation = null) {
     if (!command.message || command.message.length > 4_000) throw new Error("后续消息长度需要在 1–4000 个字符之间");
+    const submissionId = operation?.id ?? this.#submissionId(event);
+    const recorded = this.state.state.submissions[submissionId];
+    if (recorded && ["submitting", "unknown"].includes(recorded.status)) throw new SubmissionPendingError(submissionId);
     const knownTurnId = currentTurnId(thread) ?? this.state.getWatch(threadId)?.turnId ?? null;
     const shouldQueue = isDesktopActive(thread) ||
       (isActive(thread) && attachments.length > 0) ||
       (isActive(thread) && !knownTurnId);
-    if (shouldQueue) {
+    if (shouldQueue && recorded?.status !== "submitted") {
       return this.#queueThreadMessage(threadId, thread, command.message, event, attachments,
         isDesktopActive(thread) ? "当前回合由 Codex Desktop 运行" :
           attachments.length ? "附件会在当前回合结束后作为独立回合发送" :
@@ -533,11 +550,13 @@ export class Bridge {
 
     let turn;
     try {
-      turn = await this.codex.sendMessage(threadId, command.message, thread, {
+      turn = await this.submissions.submit(submissionId, {
+        type: "send", threadId, event, attachments, operationId: operation?.id
+      }, () => this.codex.sendMessage(threadId, command.message, thread, {
         expectedTurnId: knownTurnId,
         attachments,
-        clientUserMessageId: event.message_id ?? null
-      });
+        clientUserMessageId: submissionId
+      }));
     } catch (error) {
       if (/同步当前回合|找不到.*回合|current turn|expectedTurnId/i.test(error.message)) {
         return this.#queueThreadMessage(threadId, thread, command.message, event, attachments, "当前回合刚发生切换");
@@ -552,6 +571,7 @@ export class Bridge {
     this.#watchThread({ ...thread, status: { type: "active" } }, event, turn.id);
     await this.state.save();
     await this.#syncDesktopThread(threadId);
+    await this.submissions.applied(submissionId);
     return card(noticeCard({
       title: "已发送给 Codex",
       message: `任务：${threadTitle(thread)}\n完成或失败后会在这里通知。`,
@@ -567,7 +587,8 @@ export class Bridge {
       attachments,
       chatId: event.chat_id,
       sourceMessageId: event.message_id,
-      senderId: event.sender_id ?? event.operator_id
+      senderId: event.sender_id ?? event.operator_id,
+      requestId: this.#submissionId(event)
     }, this.config.maxQueuedMessagesPerThread);
     this.state.selectThread(event.chat_id, threadId);
     this.state.bindMessage(event.message_id, { threadId, chatId: event.chat_id, kind: "queued-message" });
@@ -692,19 +713,23 @@ export class Bridge {
       response = await this.executeCommand(command, event, { attachments });
     } catch (error) {
       this.#logError("message command failed", error, { eventId, command: event.content });
-      response = card(noticeCard({ title: "处理失败", message: error.message, template: "red", status: "失败", action: { text: "健康检查", action: "health" } }));
+      response = this.#errorResponse(error, "处理失败");
     }
     if (response.threadId) {
       this.state.bindMessage(event.message_id, { threadId: response.threadId, chatId: event.chat_id, kind: "source" });
     }
+    const delivery = await this.outbox.enqueue(`reply-${event.message_id}`, {
+      type: response.type, content: response.content, messageId: event.message_id,
+      chatId: event.chat_id, threadId: response.threadId
+    });
     await this.state.finishProcessing(eventId);
     try {
-      const sent = await this.#reply(event.message_id, response, `reply-${event.message_id}`);
+      const sent = await this.outbox.deliver(delivery);
       if (response.threadId && sent?.message_id) {
         this.state.bindMessage(sent.message_id, { threadId: response.threadId, chatId: event.chat_id, kind: "bot-reply" });
         await this.state.save();
       }
-      this.lastReplyAt = Date.now();
+      if (sent?.message_id) this.lastReplyAt = Date.now();
     } catch (error) {
       this.#logError("Feishu reply failed", error, { eventId });
     }
@@ -722,7 +747,7 @@ export class Bridge {
       return;
     }
     this.lastMessageAt = Date.now();
-    this.state.recordChat(event.chat_id, { chatType: "p2p", senderId: event.operator_id });
+    this.state.recordChat(event.chat_id, { chatType: isAllowedGroup(this.config, event.chat_id) ? "group" : "p2p", senderId: event.operator_id });
     const value = parseActionValue(event.action_value);
     const form = parseActionValue(event.form_value);
     const action = value.action ?? ({ create_submit: "create", send_submit: "send" }[event.action_name]);
@@ -737,19 +762,29 @@ export class Bridge {
         chat_id: event.chat_id,
         message_id: event.message_id,
         operator_id: event.operator_id,
-        sender_id: event.operator_id
+        sender_id: event.operator_id,
+        requestId: event.event_id
       }, { fromAction: true, confirmed: action === "stop" });
     } catch (error) {
       this.#logError("card action failed", error, { eventId, action });
-      response = card(noticeCard({ title: "操作失败", message: error.message, template: "red", status: "失败", action: { text: "任务首页", action: "home" } }));
+      response = this.#errorResponse(error, "操作失败");
     }
     if (response.threadId) {
       this.state.bindMessage(event.message_id, { threadId: response.threadId, chatId: event.chat_id, kind: "interactive-card" });
     }
+    // Retain a fallback response before acknowledging the action. Token updates may expire.
+    const fallback = await this.outbox.enqueue(`action-fallback-${eventId}`, {
+      type: response.type, content: response.content, messageId: event.message_id,
+      chatId: event.chat_id, threadId: response.threadId, status: "held"
+    });
     await this.state.finishProcessing(eventId, "event");
     try {
       if (response.type === "card" && event.token) {
         await this.lark.updateCard(event.token, response.content);
+        fallback.status = "delivered";
+        fallback.deliveredAt = Date.now();
+        this.lastReplyAt = Date.now();
+        await this.state.save();
         if (response.detailView && response.threadId) {
           this.#subscribeDetailCard({
             messageId: event.message_id,
@@ -764,17 +799,24 @@ export class Bridge {
         }
       } else {
         this.detailSubscriptions.delete(event.message_id);
-        const sent = await this.#reply(event.message_id, response, `action-${eventId}`);
+        fallback.status = "pending";
+        await this.state.save();
+        const sent = await this.outbox.deliver(fallback);
         if (response.threadId && sent?.message_id) {
           this.state.bindMessage(sent.message_id, { threadId: response.threadId, chatId: event.chat_id, kind: "bot-reply" });
           await this.state.save();
         }
       }
-      this.lastReplyAt = Date.now();
     } catch (error) {
       this.detailSubscriptions.delete(event.message_id);
       this.#logError("card update failed", error, { eventId });
-      await this.#reply(event.message_id, response, `action-fallback-${eventId}`).catch((fallbackError) => this.#logError("card fallback reply failed", fallbackError, { eventId }));
+      // An ambiguous token update may already be visible. Never create a second
+      // message unless Feishu explicitly rejected the token (or nothing was sent).
+      const rejected = error.deliveryOutcome === "rejected" || error.deliveryOutcome === "not_sent";
+      if (fallback.status !== "delivered") fallback.status = rejected ? "pending" : "unknown";
+      fallback.lastError = error.message;
+      await this.state.save();
+      if (fallback.status === "pending") await this.outbox.deliver(fallback);
     }
     ack();
   }
@@ -976,15 +1018,23 @@ export class Bridge {
       return;
     }
     if (watch.turnId && watch.turnId !== turn.id) {
-      if (this.state.queuedFor(threadId).length === 0) return;
-      this.state.watchThread(threadId, { ...watch, turnId: turn.id });
-      await this.state.save();
-      watch = this.state.getWatch(threadId);
+      // Delayed completion events cannot settle or replace a newer watched turn.
+      return;
     }
-    await this.#notifyCompletion(threadId, turn.status, watch);
+    const outcome = confirmedOutcome(turn, { authoritative: true });
+    if (!outcome) return;
+    watch.turnId ??= outcome.turnId;
+    watch.outcome ??= outcome;
+    await this.state.save();
+    await this.#notifyCompletion(threadId, outcome.status, watch, null, outcome.answer);
   }
 
   async #poll() {
+    await Promise.all([this.outbox.drain(), this.#pollExecution()]);
+  }
+
+  async #pollExecution() {
+    await this.#recoverSubmissions();
     await this.#pollSchedules();
     await this.#drainOperations();
     await this.#pollWatches();
@@ -994,11 +1044,58 @@ export class Bridge {
     }
   }
 
+  async #recoverSubmissions() {
+    if (!this.codex.ready || this.recoveringSubmissions || this.operationDispatching) return;
+    this.recoveringSubmissions = true;
+    try {
+      for (const entry of await this.submissions.reconcile({ isApplying: (entry) =>
+        this.state.processing.has(entry.context.event?.requestId ?? entry.context.event?.message_id) ||
+        (Boolean(entry.context.queueId) && this.completionLanes.has(entry.threadId)) })) {
+        const { event, queueId, operationId, background } = entry.context;
+        const turn = entry.context.type === "create" ? entry.result.turn : entry.result;
+        const threadId = entry.threadId;
+        if (!threadId || !turn?.id) continue;
+        const chat = this.state.getChat(event.chat_id);
+        if (!background && (chat.focusedAt ?? 0) <= entry.startedAt) this.state.selectThread(event.chat_id, threadId);
+        if (entry.context.type === "create") {
+          const recent = this.state.getChat(event.chat_id).recentThreadIds ?? [];
+          this.state.setRecentThreads(event.chat_id, [threadId, ...recent.filter((id) => id !== threadId)].slice(0, this.config.recentThreadLimit));
+        }
+        const watch = this.state.getWatch(threadId);
+        if (!watch || watch.turnId === turn.id || watch.updatedAt < entry.startedAt) {
+          this.state.watchThread(threadId, { turnId: turn.id, chatId: event.chat_id,
+            messageId: event.message_id, senderId: event.sender_id ?? event.operator_id });
+        }
+        if (queueId) {
+          this.state.state.queues[threadId] = (this.state.state.queues[threadId] ?? []).filter((item) => item.id !== queueId);
+        }
+        this.state.bindMessage(event.message_id, { threadId, chatId: event.chat_id, kind: "reconciled-source" });
+        const content = noticeCard({ title: "已核对 Codex 请求", status: "已接收", template: "green",
+          message: "已找到此前请求对应的回合，未重复提交。后续结果会在这里通知。",
+          action: { text: "查看进度", action: "progress", value: { threadId } } });
+        await this.#deliverCard(background ? null : event.message_id, content, `reconciled-${entry.id}`, event.chat_id, threadId);
+        if (operationId) {
+          const operation = this.state.state.operations[operationId];
+          if (operation?.scheduleId) {
+            const schedule = this.state.getSchedule(operation.scheduleId);
+            if (schedule) this.state.updateSchedule(schedule.id, { lastThreadId: threadId,
+              status: schedule.spec.kind === "once" ? "completed" : schedule.status, lastError: null });
+          }
+          this.state.completeOperation(operationId);
+        }
+        await this.submissions.applied(entry.id);
+        await this.#syncDesktopThread(threadId);
+        this.logger.info("Codex submission reconciled", { submissionId: entry.id, threadId, turnId: turn.id });
+      }
+    } finally { this.recoveringSubmissions = false; }
+  }
+
   #protectedAttachmentPaths() {
     const containers = [
       ...this.state.allQueued(),
       ...this.state.allOperations(),
-      ...Object.values(this.state.state.pendingIntents)
+      ...Object.values(this.state.state.pendingIntents),
+      ...Object.values(this.state.state.submissions).filter((entry) => !entry.applied).map((entry) => entry.context)
     ];
     return containers.flatMap((container) => container.attachments ?? []).map((attachment) => attachment.path).filter(Boolean);
   }
@@ -1092,12 +1189,11 @@ export class Bridge {
               type: "send",
               selector: operation.threadId,
               message: operation.text
-            }, event, operation.threadId, thread, operation.attachments ?? []);
+            }, event, operation.threadId, thread, operation.attachments ?? [], operation);
           } else {
             throw new Error(`未知离线操作类型：${operation.type}`);
           }
 
-          this.state.completeOperation(operation.id);
           if (operation.scheduleId) {
             const schedule = this.state.getSchedule(operation.scheduleId);
             if (schedule) {
@@ -1113,16 +1209,14 @@ export class Bridge {
 
           let sent;
           if (operation.background) {
-            sent = await this.lark.sendCard({
-              chatId: operation.chatId,
-              card: response.content,
-              idempotencyKey: `operation-${operation.id}`.slice(0, 50)
-            });
+            sent = await this.#deliverCard(null, response.content, `operation-${operation.id}`,
+              operation.chatId, response.threadId);
           } else if (operation.sourceMessageId) {
-            sent = await this.lark.replyCard(
+            sent = await this.#deliverCard(
               operation.sourceMessageId,
               response.content,
-              `operation-${operation.id}`.slice(0, 50)
+              `operation-${operation.id}`,
+              operation.chatId, response.threadId
             );
           }
           if (response.threadId && sent?.message_id) {
@@ -1133,8 +1227,15 @@ export class Bridge {
             }
             await this.state.save();
           }
+          this.state.completeOperation(operation.id);
+          await this.submissions.applied(operation.id);
           this.logger.info("Queued operation dispatched", { operationId: operation.id, type: operation.type, threadId: response.threadId });
         } catch (error) {
+          if (error instanceof SubmissionPendingError) {
+            this.state.updateOperation(operation.id, { status: "uncertain", lastError: error.message });
+            await this.state.save();
+            continue;
+          }
           const failed = this.state.failOperation(operation.id, error);
           if (operation.scheduleId) {
             const schedule = this.state.getSchedule(operation.scheduleId);
@@ -1164,9 +1265,9 @@ export class Bridge {
       action: { text: "查看队列", action: "queue" }
     });
     if (operation.sourceMessageId) {
-      await this.lark.replyCard(operation.sourceMessageId, resultCard, `operation-failed-${operation.id}`.slice(0, 50));
+      await this.#deliverCard(operation.sourceMessageId, resultCard, `operation-failed-${operation.id}`, operation.chatId);
     } else {
-      await this.lark.sendCard({ chatId: operation.chatId, card: resultCard, idempotencyKey: `operation-failed-${operation.id}`.slice(0, 50) });
+      await this.#deliverCard(null, resultCard, `operation-failed-${operation.id}`, operation.chatId);
     }
   }
 
@@ -1174,6 +1275,10 @@ export class Bridge {
     if (!this.codex.ready) return;
     for (let watch of this.state.activeWatches()) {
       try {
+        if (watch.outcome) {
+          await this.#notifyCompletion(watch.threadId, watch.outcome.status, watch, null, watch.outcome.answer);
+          continue;
+        }
         if (watch.rolloutPath) {
           const rollout = await readRolloutSnapshot(watch.rolloutPath);
           const hasQueuedMessages = this.state.queuedFor(watch.threadId).length > 0;
@@ -1182,17 +1287,24 @@ export class Bridge {
             await this.state.save();
             watch = this.state.getWatch(watch.threadId);
           }
-          if ((!watch.turnId || rollout?.turnId === watch.turnId) && rollout?.status === "completed") {
-            await this.#notifyCompletion(watch.threadId, "completed", watch, null, rollout.result);
+          const outcome = confirmedOutcome({ id: watch.turnId ?? rollout?.turnId }, { rollout });
+          if (outcome) {
+            watch.turnId ??= outcome.turnId;
+            watch.outcome = outcome;
+            await this.state.save();
+            await this.#notifyCompletion(watch.threadId, outcome.status, watch, null, outcome.answer);
             continue;
           }
           if (hasQueuedMessages && rollout?.status === "inProgress") continue;
         }
         const thread = await this.#enrichThread(await this.codex.readThread(watch.threadId));
-        const turn = latestTurn(thread);
-        if (!turn || turn.status === "inProgress") continue;
-        if (watch.turnId && watch.turnId !== turn.id) continue;
-        await this.#notifyCompletion(watch.threadId, turn.status, watch, thread);
+        const turn = watch.turnId ? thread.turns?.find((item) => item.id === watch.turnId) : latestTurn(thread);
+        const outcome = confirmedOutcome(turn, { rollout: thread.rollout });
+        if (!outcome) continue;
+        watch.turnId ??= outcome.turnId;
+        watch.outcome = outcome;
+        await this.state.save();
+        await this.#notifyCompletion(watch.threadId, outcome.status, watch, thread, outcome.answer);
       } catch (error) {
         this.#logError("watch poll item failed", error, { threadId: watch.threadId });
       }
@@ -1200,24 +1312,42 @@ export class Bridge {
   }
 
   async #notifyCompletion(threadId, turnStatus, watch, existingThread, resultOverride = "") {
+    if (this.completionLanes.has(threadId)) return this.completionLanes.get(threadId);
+    const pending = this.#settleCompletion(threadId, turnStatus, watch, existingThread, resultOverride)
+      .finally(() => this.completionLanes.delete(threadId));
+    this.completionLanes.set(threadId, pending);
+    return pending;
+  }
+
+  async #settleCompletion(threadId, turnStatus, watch, existingThread, resultOverride) {
+    const current = this.state.getWatch(threadId);
+    if (!current || current.notified || current.turnId !== watch.turnId) return;
     const next = this.state.queuedFor(threadId)[0];
     const thread = existingThread ?? await this.#readCompletedThread(threadId);
     if (next) {
-      let dispatchThread = thread;
+      const activeTurn = thread.turns?.findLast((turn) => turn.status === "inProgress");
+      if (activeTurn && activeTurn.id !== watch.turnId) return;
+      // Terminal evidence belongs to this exact turn; do not steer its stale
+      // in-progress history representation after receiving turn/completed.
+      const settledThread = (value) => ({ ...value, status: { type: "idle" },
+        turns: (value.turns ?? []).map((item) => item.id === watch.turnId ? { ...item, status: turnStatus } : item) });
+      let dispatchThread = settledThread(thread);
       let turn;
+      const submissionId = next.requestId ?? next.id;
+      const context = { type: "send", threadId, queueId: next.id, attachments: next.attachments,
+        event: { chat_id: next.chatId, message_id: next.sourceMessageId, sender_id: next.senderId } };
+      const submit = () => this.submissions.submit(submissionId, context, () => this.codex.sendMessage(threadId, next.text, dispatchThread, {
+        clientUserMessageId: submissionId, attachments: next.attachments ?? []
+      }));
       try {
-        turn = await this.codex.sendMessage(threadId, next.text, dispatchThread, {
-          clientUserMessageId: next.id,
-          attachments: next.attachments ?? []
-        });
+        turn = await submit();
       } catch (error) {
         if (!isWriterConflict(error)) throw error;
         await this.#releaseCodexThread(threadId);
-        dispatchThread = await this.#enrichThread(await this.codex.readThread(threadId));
-        turn = await this.codex.sendMessage(threadId, next.text, dispatchThread, {
-          clientUserMessageId: next.id,
-          attachments: next.attachments ?? []
-        });
+        const refreshed = await this.#enrichThread(await this.codex.readThread(threadId));
+        if (refreshed.turns?.some((item) => item.status === "inProgress" && item.id !== watch.turnId)) return;
+        dispatchThread = settledThread(refreshed);
+        turn = await submit();
       }
       this.state.shiftQueue(threadId);
       this.state.watchThread(threadId, {
@@ -1231,18 +1361,19 @@ export class Bridge {
       await this.#syncDesktopThread(threadId);
       this.logger.info("Queued Codex message dispatched", { threadId, queueId: next.id, turnId: turn.id });
       if (!this.state.isMuted()) {
-        const sent = await this.lark.replyCard(next.sourceMessageId, noticeCard({
+        const sent = await this.#deliverCard(next.sourceMessageId, noticeCard({
           title: "排队消息已发送",
           message: `上一回合已结束，已自动发送：\n\n${truncate(next.text, 300)}`,
           template: "green",
           status: "已继续",
           action: { text: "查看进度", action: "progress", value: { threadId } }
-        }), `queue-sent-${next.id}`);
+        }), `queue-sent-${next.id}`, next.chatId, threadId);
         if (sent?.message_id) {
           this.state.bindMessage(sent.message_id, { threadId, chatId: next.chatId, kind: "queue-dispatched" });
           await this.state.save();
         }
       }
+      await this.submissions.applied(submissionId);
       return;
     }
 
@@ -1255,14 +1386,17 @@ export class Bridge {
     }
     try {
       await this.#syncDesktopThread(threadId);
-      const resultCard = completionCard(thread, turnStatus, resultOverride);
-      const sent = watch.messageId ?
-        await this.lark.replyCard(watch.messageId, resultCard, `done-${threadId}-${watch.turnId ?? "latest"}`) :
-        await this.lark.sendCard({ chatId: watch.chatId, card: resultCard, idempotencyKey: `done-${threadId}-${watch.turnId ?? "latest"}` });
+      const targetTurn = thread.turns?.find((turn) => turn.id === watch.turnId);
+      const answer = resultOverride || finalAnswer(targetTurn);
+      if (!answer && turnStatus === "completed" && Date.now() - (watch.outcome?.observedAt ?? 0) < 10_000) return;
+      const resultCard = completionCard(thread, turnStatus, outcomeText({ status: turnStatus,
+        answer }));
+      const sent = await this.#deliverCard(watch.messageId, resultCard,
+        `done-${threadId}-${watch.turnId ?? "latest"}`, watch.chatId, threadId);
       if (sent?.message_id) this.state.bindMessage(sent.message_id, { threadId, chatId: watch.chatId, kind: "completion" });
       this.state.markNotified(threadId);
       await this.state.save();
-      this.logger.info("Codex completion notification sent", { threadId, turnStatus });
+      this.logger.info(sent ? "Codex completion notification sent" : "Codex completion saved for delivery", { threadId, turnStatus });
     } finally {
       await this.#releaseCodexThread(threadId);
     }
@@ -1298,13 +1432,13 @@ export class Bridge {
     }
     const watch = threadId ? this.state.getWatch(threadId) : null;
     if (!watch || this.state.isMuted()) return;
-    await this.lark.replyCard(watch.messageId, noticeCard({
+    await this.#deliverCard(watch.messageId, noticeCard({
       title: "任务需要你处理",
       message: "Codex 请求了飞书助手不允许代办的权限或输入。请求已安全拒绝；如需继续，请回 Codex Desktop 查看任务。",
       template: "yellow",
       status: "需要处理",
       action: { text: "查看进度", action: "progress", value: { threadId } }
-    }), `attention-${threadId}-${request.id}`);
+    }), `attention-${threadId}-${request.id}`, watch.chatId, threadId);
   }
 
   async #enrichThread(thread) {
@@ -1324,7 +1458,8 @@ export class Bridge {
       this.logger.warn("Ignored unauthorized Feishu user", { senderId: event.sender_id });
       return false;
     }
-    if (this.config.requireP2P && event.chat_type !== "p2p") {
+    if (event.chat_type === "group") return isMentionedGroupMessage(this.config, event);
+    if (event.chat_type !== "p2p") {
       this.logger.warn("Ignored non-p2p Feishu message", { chatId: event.chat_id, chatType: event.chat_type });
       return false;
     }
@@ -1341,6 +1476,7 @@ export class Bridge {
       this.logger.warn("Ignored unauthorized card operator", { operatorId: event.operator_id });
       return false;
     }
+    if (isAllowedGroup(this.config, event.chat_id)) return true;
     if (this.config.allowedChatIds.length > 0 && !this.config.allowedChatIds.includes(event.chat_id)) return false;
     return true;
   }
@@ -1356,6 +1492,9 @@ export class Bridge {
       codexReady: Boolean(this.codex.ready),
       larkReady: EVENT_KEYS.every((key) => this.readyEventKeys.has(key)),
       queuedCount: this.state.allQueued().length + this.state.allOperations().length,
+      pendingDeliveryCount: Object.values(this.state.state.outbox).filter((entry) => entry.status === "pending").length,
+      uncertainDeliveryCount: Object.values(this.state.state.outbox).filter((entry) => entry.status === "unknown").length,
+      uncertainSubmissionCount: Object.values(this.state.state.submissions).filter((entry) => ["submitting", "unknown"].includes(entry.status)).length,
       watchCount: this.state.activeWatches().length,
       scheduleCount: Object.values(this.state.state.schedules).filter((schedule) => schedule.status === "active").length,
       lastMessageAt: this.lastMessageAt,
@@ -1365,9 +1504,19 @@ export class Bridge {
     };
   }
 
-  async #reply(messageId, response, idempotencyKey) {
-    if (response.type === "card") return this.lark.replyCard(messageId, response.content, idempotencyKey);
-    return this.lark.replyMarkdown(messageId, response.content, idempotencyKey);
+  #submissionId(event) {
+    return deliveryKey(`input-${event.requestId ?? event.message_id}`);
+  }
+
+  #errorResponse(error, title) {
+    const pending = error instanceof SubmissionPendingError;
+    return card(noticeCard({ title: pending ? "请求待核对" : title, message: error.message,
+      template: pending ? "yellow" : "red", status: pending ? "待核对" : "失败",
+      action: { text: "健康检查", action: "health" } }));
+  }
+
+  async #deliverCard(messageId, content, identity, chatId, threadId) {
+    return this.outbox.deliver(await this.outbox.enqueue(identity, { type: "card", content, messageId, chatId, threadId }));
   }
 
   async #startCodex() {
