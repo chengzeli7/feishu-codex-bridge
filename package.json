@@ -32,7 +32,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@larksuite/cli": "1.0.89",
+    "@larksuite/cli": "1.0.97",
     "ws": "8.21.1"
   }
 }
