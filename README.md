@@ -11,13 +11,13 @@ Codex Desktop tasks from a Feishu or Lark private chat.
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.5-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.6-orange.svg)](CHANGELOG.md)
 
 </div>
 
 ![Feishu Codex Bridge connects a private chat to Codex Desktop running on your Mac](docs/images/hero.png)
 
-> **Public beta:** `v0.1.5` uses local app-server capabilities currently bundled
+> **Public beta:** `v0.1.6` uses local app-server capabilities currently bundled
 > with Codex Desktop. A future Codex update may require a compatibility update.
 
 ## What problem does it solve?

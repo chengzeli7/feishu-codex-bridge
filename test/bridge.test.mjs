@@ -1,10 +1,11 @@
 import { EventEmitter } from "node:events";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { Bridge } from "../src/bridge.mjs";
+import { CodexClient } from "../src/codex-client.mjs";
 
 class FakeCodex extends EventEmitter {
   constructor(thread) {
@@ -284,7 +285,7 @@ test("enabled groups route owner mentions and keep replies in the main chat stre
     await waitFor(() => group.acknowledged);
     assert.equal(lark.replies.length, 1);
     assert.equal(codex.created.length, 0);
-    assert.equal(lark.replies[0].content.header.title.content, "Codex 任务");
+    assert.equal(lark.replies[0].content.header.title.content, "飞书工作助手");
     assert.deepEqual(lark.replies[0].options, { replyInThread: false });
     assert.equal(bridge.state.getChat("oc_group").chatType, "group");
     const privateMessage = messageEnvelope(); lark.emit("event", privateMessage);
@@ -350,7 +351,7 @@ test("lists tasks and sends a completion card", async () => {
     const list = messageEnvelope({ message_id: "om_list", content: "任务" });
     lark.emit("event", list);
     await waitFor(() => lark.replies.length === 1 && list.acknowledged);
-    assert.equal(lark.replies[0].content.header.title.content, "Codex 任务");
+    assert.equal(lark.replies[0].content.header.title.content, "飞书工作助手");
     assert.equal(list.acknowledged, true);
 
     const progress = messageEnvelope({ message_id: "om_progress", content: "进度1" });
@@ -365,7 +366,7 @@ test("lists tasks and sends a completion card", async () => {
     await waitFor(() => lark.replies.length === 3);
     await waitFor(() => codex.unsubscribed.length === 1);
     assert.equal(lark.replies[2].messageId, "om_progress");
-    assert.equal(lark.replies[2].content.header.title.content, "Codex 任务已完成");
+    assert.equal(lark.replies[2].content.header.title.content, "这件事已完成");
     assert.deepEqual(codex.unsubscribed, [thread.id]);
   } finally {
     await bridge.stop();
@@ -469,7 +470,7 @@ test("falls back to thread snapshot pagination when the daemon has not implement
     }));
     await waitFor(() => lark.updates.length === 1);
     assert.match(JSON.stringify(lark.updates[0].content), /较早记录/);
-    assert.match(JSON.stringify(lark.updates[0].content), /返回最新/);
+    assert.match(JSON.stringify(lark.updates[0].content), /回到最新进展/);
 
     lark.emit("event", messageEnvelope({ message_id: "om_detail_fallback_2", content: "详情" }));
     await waitFor(() => lark.replies.length === 2);
@@ -523,6 +524,117 @@ test("continues a newly created active task with the stored turn id", async () =
   }
 });
 
+test("queued continuations restore unloaded completed, interrupted and failed tasks before starting", async () => {
+  for (const status of ["completed", "interrupted", "failed"]) {
+    const thread = { id: "thread", name: "Restored task", cwd: "/tmp/project", status: { type: "notLoaded" },
+      turns: [{ id: "old", status, items: [] }] };
+    const { bridge, codex, lark, tempDir } = await makeBridge(thread);
+    const client = new CodexClient({});
+    const requests = [];
+    client.request = async (method, params) => {
+      requests.push({ method, params });
+      if (method === "thread/resume") return { thread: { ...thread, status: { type: "idle" } } };
+      assert.equal(method, "turn/start");
+      assert.equal(requests[0].method, "thread/resume");
+      return { turn: { id: "next", status: "inProgress", items: [] } };
+    };
+    codex.sendMessage = client.sendMessage.bind(client);
+    try {
+      bridge.state.enqueue(thread.id, { text: "queued", chatId: "oc_chat", sourceMessageId: "om_queue_restore", requestId: "same-request" });
+      bridge.state.watchThread(thread.id, { chatId: "oc_chat", messageId: "om_queue_restore", turnId: "old" });
+      codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
+      await waitFor(() => !bridge.state.queuedFor(thread.id).length && lark.replies.length === 1);
+      assert.deepEqual(requests.map((item) => item.method), ["thread/resume", "turn/start"]);
+      assert.equal(requests[1].params.clientUserMessageId, "same-request");
+      assert.equal(bridge.state.getWatch(thread.id).turnId, "next");
+      assert.equal(thread.status.type, "notLoaded");
+    } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+  }
+});
+
+test("queued dispatch backs off persistent rejection, reports it once, then recovers", async () => {
+  const thread = { id: "thread", status: { type: "notLoaded" }, turns: [{ id: "old", status: "completed", items: [] }] };
+  const { bridge, codex, lark, tempDir } = await makeBridge(thread);
+  let attempts = 0;
+  codex.sendMessage = async () => {
+    attempts += 1;
+    if (attempts <= 4) throw Object.assign(new Error("thread not found: thread"), { requestOutcome: "rejected" });
+    return { id: "recovered", status: "inProgress" };
+  };
+  try {
+    const queued = bridge.state.enqueue(thread.id, { text: "queued", chatId: "oc_chat", sourceMessageId: "om_retry", requestId: "request" });
+    bridge.state.watchThread(thread.id, { chatId: "oc_chat", messageId: "om_retry", turnId: "old" });
+    const complete = () => codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
+    for (let i = 1; i <= 4; i += 1) {
+      queued.retryAt = 0;
+      complete();
+      await waitFor(() => attempts === i && !bridge.completionLanes.has(thread.id));
+      assert.equal(queued.dispatchFailures, i);
+      assert.ok(queued.retryAt > Date.now());
+      assert.equal(lark.replies.length, i < 3 ? 0 : 1);
+      complete();
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(attempts, i);
+    }
+    assert.equal(queued.failureNoticeQueued, true);
+    const persisted = JSON.parse(await readFile(bridge.config.stateFile, "utf8")).queues[thread.id][0];
+    assert.equal(persisted.dispatchFailures, 4);
+    assert.equal(persisted.retryAt, queued.retryAt);
+    assert.equal(persisted.failureNoticeQueued, true);
+    assert.match(JSON.stringify((await bridge.executeCommand({ type: "queue_list" }, { chat_id: "oc_chat" })).content), /暂未发送成功/);
+    queued.retryAt = 0;
+    complete();
+    await waitFor(() => !bridge.state.queuedFor(thread.id).length && lark.replies.length === 2);
+    assert.equal(bridge.state.getWatch(thread.id).turnId, "recovered");
+    assert.equal(bridge.state.state.submissions.request.status, "submitted");
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+});
+
+test("queued restoration does not drain or report a failure while a newer turn is active", async () => {
+  const thread = { id: "thread", status: { type: "notLoaded" }, turns: [{ id: "old", status: "completed", items: [] }] };
+  const { bridge, codex, lark, tempDir } = await makeBridge(thread);
+  const client = new CodexClient({});
+  const requests = [];
+  client.request = async (method) => {
+    requests.push(method);
+    assert.equal(method, "thread/resume");
+    return { thread: { ...thread, status: { type: "active" }, turns: [{ id: "new", status: "inProgress" }] } };
+  };
+  codex.sendMessage = client.sendMessage.bind(client);
+  try {
+    const queued = bridge.state.enqueue(thread.id, { text: "queued", chatId: "oc_chat", sourceMessageId: "om_new_turn" });
+    bridge.state.watchThread(thread.id, { chatId: "oc_chat", messageId: "om_new_turn", turnId: "old" });
+    codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
+    await waitFor(() => requests.length === 1 && !bridge.completionLanes.has(thread.id));
+    assert.equal(bridge.state.queuedFor(thread.id).length, 1);
+    assert.equal(queued.dispatchFailures, undefined);
+    assert.equal(lark.replies.length, 0);
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+});
+
+test("delayed queue notifications never replay a submission whose outcome is unknown", async () => {
+  const thread = { id: "thread", status: { type: "idle" }, turns: [{ id: "old", status: "completed", items: [] }] };
+  const { bridge, codex, lark, tempDir } = await makeBridge(thread);
+  let writes = 0;
+  codex.sendMessage = async () => {
+    writes += 1;
+    throw Object.assign(new Error("timeout after dispatch"), { requestOutcome: "unknown", requestMethod: "turn/start" });
+  };
+  try {
+    const queued = bridge.state.enqueue(thread.id, { text: "queued", chatId: "oc_chat", sourceMessageId: "om_uncertain", requestId: "uncertain" });
+    bridge.state.watchThread(thread.id, { chatId: "oc_chat", messageId: "om_uncertain", turnId: "old" });
+    for (let i = 1; i <= 3; i += 1) {
+      queued.retryAt = 0;
+      codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
+      await waitFor(() => queued.dispatchFailures === i && !bridge.completionLanes.has(thread.id));
+    }
+    assert.equal(writes, 1);
+    assert.equal(bridge.state.state.submissions.uncertain.status, "unknown");
+    assert.equal(bridge.state.queuedFor(thread.id).length, 1);
+    assert.equal(lark.replies.length, 1);
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+});
+
 test("keeps a continuation in the bridge queue while Codex Desktop owns the writer", async () => {
   const thread = {
     id: "019f0000-0000-7000-8000-000000000004",
@@ -546,16 +658,19 @@ test("keeps a continuation in the bridge queue while Codex Desktop owns the writ
     assert.equal(bridge.state.isWatching(thread.id), true);
 
     codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
-    await waitFor(() => codex.sent.length === 3 && !bridge.completionLanes.has(thread.id));
+    await waitFor(() => codex.sent.length === 2 && !bridge.completionLanes.has(thread.id));
     assert.equal(bridge.state.queuedFor(thread.id).length, 1);
+    assert.equal(bridge.state.queuedFor(thread.id)[0].dispatchFailures, 1);
+    assert.equal(codex.unsubscribed.length, 0);
 
     codex.sendMessage = async (threadId, text, selectedThread, options) => {
       codex.sent.push({ threadId, text, thread: selectedThread, options });
       return { id: "turn-retried", status: "inProgress", items: [] };
     };
+    bridge.state.queuedFor(thread.id)[0].retryAt = 0;
     codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
     await waitFor(() => bridge.state.queuedFor(thread.id).length === 0 && lark.replies.length === 2);
-    assert.equal(codex.sent.length, 4);
+    assert.equal(codex.sent.length, 3);
     assert.equal(lark.replies.at(-1).content.header.title.content, "排队消息已发送");
   } finally {
     await bridge.stop();
@@ -697,7 +812,7 @@ test("advances a queued watch and releases a completed Desktop writer before dis
   }
 });
 
-test("retries a queued send after a completed Desktop writer conflict", async () => {
+test("persistent writer conflict is reported and paused without pretending to release another owner", async () => {
   const thread = {
     id: "019f0000-0000-7000-8000-000000000013",
     name: "Desktop 写入冲突",
@@ -732,10 +847,25 @@ test("retries a queued send after a completed Desktop writer conflict", async ()
     });
     await bridge.state.save();
 
+    const queued = bridge.state.queuedFor(thread.id)[0];
+    for (let i = 1; i <= 5; i += 1) {
+      queued.retryAt = 0;
+      codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
+      await waitFor(() => codex.sent.length === i && !bridge.completionLanes.has(thread.id));
+    }
+    assert.equal(queued.dispatchPaused, true);
+    assert.equal(lark.replies.length, 1);
+    assert.deepEqual(codex.unsubscribed, []);
+    queued.retryAt = 0;
     codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
-    await waitFor(() => bridge.state.queuedFor(thread.id).length === 0 && lark.replies.length === 1);
-    assert.deepEqual(codex.unsubscribed, [thread.id]);
-    assert.equal(codex.sent.length, 2);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(codex.sent.length, 5);
+    await bridge.executeCommand({ type: "queue_retry", selector: thread.id }, { chat_id: "oc_chat", sender_id: "ou_allowed" });
+    assert.equal(queued.dispatchPaused, false);
+    writerOwned = false;
+    codex.emit("turn/completed", { threadId: thread.id, turn: thread.turns[0] });
+    await waitFor(() => bridge.state.queuedFor(thread.id).length === 0 && lark.replies.length === 2);
+    assert.equal(codex.sent.length, 6);
     assert.equal(codex.sent[0].options.clientUserMessageId, codex.sent[1].options.clientUserMessageId);
     assert.equal(bridge.state.getWatch(thread.id).turnId, "turn-after-release");
     assert.equal(lark.replies.at(-1).content.header.title.content, "排队消息已发送");
@@ -855,7 +985,7 @@ test("creates a persistent schedule without starting Codex immediately", async (
     await waitFor(() => lark.replies.length === 1);
     assert.equal(codex.created.length, 0);
     assert.equal(bridge.state.schedulesForChat("oc_chat").length, 1);
-    assert.equal(lark.replies[0].content.header.title.content, "定时任务详情");
+    assert.equal(lark.replies[0].content.header.title.content, "定时事项详情");
   } finally {
     await bridge.stop();
     await rm(tempDir, { recursive: true, force: true });
@@ -881,4 +1011,66 @@ test("dispatches a due one-shot schedule exactly once", async () => {
     await bridge.stop();
     await rm(tempDir, { recursive: true, force: true });
   }
+});
+
+test("consumer startup alone never reports the Feishu transport as connected", async () => {
+  const { bridge, lark, tempDir } = await makeBridge(null);
+  try {
+    let result = await bridge.executeCommand({ type: "health" }, { chat_id: "oc_chat" });
+    assert.match(JSON.stringify(result.content), /待确认/);
+    lark.emit("connection", { eventKey: "im.message.receive_v1", state: "connected" });
+    result = await bridge.executeCommand({ type: "health" }, { chat_id: "oc_chat" });
+    assert.equal(result.content.header.template, "green");
+    lark.emit("connection", { eventKey: "im.message.receive_v1", state: "reconnecting" });
+    lark.emit("ready", "im.message.receive_v1");
+    result = await bridge.executeCommand({ type: "health" }, { chat_id: "oc_chat" });
+    assert.equal(result.content.header.template, "yellow");
+    assert.match(JSON.stringify(result.content), /重连中/);
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+});
+
+test("one-tap clarification sends the preserved ordinary follow-up exactly once", async () => {
+  const thread = { id: "thread-followup", name: "原事项", cwd: "/tmp/project", status: { type: "idle" }, turns: [] };
+  const { bridge, codex, lark, tempDir } = await makeBridge(thread);
+  try {
+    bridge.state.selectThread("oc_chat", thread.id);
+    const incoming = messageEnvelope({ message_id: "om_ordinary_followup", content: "不调用工具，只回复验证通过" });
+    lark.emit("event", incoming); await waitFor(() => incoming.acknowledged);
+    assert.equal(codex.sent.length, 0); assert.equal(codex.created.length, 0);
+    const pending = Object.values(bridge.state.state.pendingIntents)[0];
+    const choice = cardActionEnvelope({ action: "clarify_continue", value: { pendingId: pending.id } });
+    lark.emit("event", choice); await waitFor(() => choice.acknowledged);
+    assert.equal(codex.sent.length, 1); assert.equal(codex.sent[0].threadId, thread.id);
+    assert.equal(codex.sent[0].text, incoming.event.content);
+    const repeat = cardActionEnvelope({ action: "clarify_continue", value: { pendingId: pending.id } });
+    lark.emit("event", repeat); await waitFor(() => repeat.acknowledged);
+    assert.equal(codex.sent.length, 1); assert.equal(codex.created.length, 0);
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+});
+
+test("schedule form callback stores a plan without immediately running it", async () => {
+  const { bridge, codex, lark, tempDir } = await makeBridge(null);
+  try {
+    const action = cardActionEnvelope({});
+    action.event.action_name = "schedule_submit";
+    action.event.action_value = {};
+    action.event.form_value = { expression: "每天 09:00 整理待办" };
+    lark.emit("event", action); await waitFor(() => action.acknowledged);
+    assert.equal(Object.keys(bridge.state.state.schedules).length, 1);
+    assert.equal(codex.created.length, 0);
+    assert.equal(lark.updates[0].content.header.title.content, "定时事项详情");
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+});
+
+test("an old retry card cannot reset an uncertain queued submission", async () => {
+  const thread = { id: "019f0000-0000-7000-8000-000000000099", name: "待核对", status: { type: "idle" }, turns: [] };
+  const { bridge, codex, tempDir } = await makeBridge(thread);
+  try {
+    const queued = bridge.state.enqueue(thread.id, { text: "可能已经发出", requestId: "uncertain-queued", chatId: "oc_chat", sourceMessageId: "om_old" });
+    queued.dispatchPaused = true; queued.dispatchFailures = 5;
+    bridge.state.state.submissions[queued.requestId] = { id: queued.requestId, status: "unknown" };
+    await assert.rejects(bridge.executeCommand({ type: "queue_retry", selector: thread.id }, { chat_id: "oc_chat", sender_id: "ou_allowed" }), /核对/);
+    assert.equal(queued.dispatchPaused, true); assert.equal(queued.dispatchFailures, 5);
+    assert.equal(codex.sent.length, 0);
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
 });

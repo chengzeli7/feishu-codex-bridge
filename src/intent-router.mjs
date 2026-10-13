@@ -70,7 +70,7 @@ export function routeNaturalMessage({
   if (boundThreadId) {
     return { type: "send", selector: boundThreadId, message, routeReason: "reply_binding" };
   }
-  if (focusedThreadId && AMBIGUOUS_SHORT.test(text)) {
+  if (focusedThreadId && (AMBIGUOUS_SHORT.test(text) || !CONTINUATION_PREFIX.test(text))) {
     return {
       type: "clarify",
       message,

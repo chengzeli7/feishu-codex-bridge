@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractVerificationUrl, hasAvailableBot } from "../src/onboarding.mjs";
 import { VERSION } from "../src/version.mjs";
+import { DESKTOP_CODEX_BIN } from "../src/desktop-runtime.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const supportRoot = path.join(os.homedir(), "Library", "Application Support", "CodexFeishuBridge");
@@ -77,7 +78,7 @@ async function main() {
   await mkdir(supportRoot, { recursive: true, mode: 0o700 });
 
   heading(1, "Check prerequisites");
-  if (!existsSync("/Applications/ChatGPT.app/Contents/Resources/codex")) {
+  if (!existsSync(DESKTOP_CODEX_BIN)) {
     throw new Error("ChatGPT Desktop is not installed at /Applications/ChatGPT.app");
   }
   if (!existsSync(bundledLark) && spawnSync("/usr/bin/which", ["lark-cli"]).status !== 0) {

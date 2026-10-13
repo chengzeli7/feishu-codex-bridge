@@ -11,13 +11,13 @@
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.5-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.6-orange.svg)](CHANGELOG.md)
 
 </div>
 
 ![Feishu Codex Bridge 将飞书私聊连接到运行在个人 Mac 上的 Codex Desktop](docs/images/hero.png)
 
-> **公开 Beta：** 当前版本为 `v0.1.5`。项目依赖 Codex Desktop 现有的本地
+> **公开 Beta：** 当前版本为 `v0.1.6`。项目依赖 Codex Desktop 现有的本地
 > app-server 能力，后续 Codex 更新可能需要同步进行兼容性适配。
 
 ## 它解决什么问题？

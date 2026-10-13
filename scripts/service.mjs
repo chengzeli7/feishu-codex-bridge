@@ -5,12 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defaultCodexAppServerSocket } from "../src/config.mjs";
+import { DESKTOP_CODEX_BIN, isDesktopCodexBin } from "../src/desktop-runtime.mjs";
 import { enableDesktopDaemonEnvironment } from "../src/desktop-daemon-env.mjs";
 import { VERSION } from "../src/version.mjs";
 
 const LABEL = "io.github.chengzeli7.feishu-codex-bridge";
 const LEGACY_LABELS = ["com.chengze.codex-feishu-bridge", "com.chengze.codex-feishu-app-server"];
-const DESKTOP_CODEX_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const userHome = os.homedir();
 const supportRoot = path.join(userHome, "Library", "Application Support", "CodexFeishuBridge");
@@ -152,7 +152,7 @@ async function install() {
       console.log(`removed unavailable workspace ${alias}: ${workspace}`);
     }
   }
-  if (usesLegacyCodex) {
+  if (usesLegacyCodex || (isDesktopCodexBin(installedConfig.codexBin) && installedConfig.codexBin !== DESKTOP_CODEX_BIN)) {
     installedConfig.codexBin = DESKTOP_CODEX_BIN;
     changed = true;
   }

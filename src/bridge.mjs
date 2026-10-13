@@ -25,6 +25,7 @@ import {
   progressCard,
   progressDetailCard,
   queueCard,
+  scheduleCreateFormCard,
   scheduleDetailCard,
   scheduleListCard,
   sendMessageFormCard,
@@ -34,15 +35,16 @@ import {
 import { Logger } from "./logger.mjs";
 import { InstanceLock } from "./instance-lock.mjs";
 import { DesktopSync } from "./desktop-sync.mjs";
+import { DesktopContinuation } from "./desktop-client.mjs";
 import { CodexDaemonManager } from "./codex-daemon.mjs";
 import { enableDesktopDaemonEnvironment } from "./desktop-daemon-env.mjs";
 
 const EVENT_KEYS = ["im.message.receive_v1", "card.action.trigger"];
 const DETAIL_ITEM_PAGE_SIZE = 24;
 const MUTATING_ACTIONS = new Set([
-  "create", "send", "stop", "archive", "queue_cancel",
+  "create", "send", "stop", "archive", "queue_cancel", "queue_retry",
   "clarify_continue", "clarify_create", "clarify_cancel",
-  "schedule_pause", "schedule_resume", "schedule_cancel"
+  "schedule_create", "schedule_pause", "schedule_resume", "schedule_cancel"
 ]);
 const SUPPORTED_MESSAGE_TYPES = new Set(["text", "post", "image", "file", "audio", "media", "video"]);
 
@@ -105,7 +107,10 @@ function normalizedEventContent(event, transcript, hasAttachments) {
 export class Bridge {
   constructor({ config, codex, codexDaemon, lark, state, logger, lock, desktopSync, attachments, progressTracker }) {
     this.config = config;
-    this.codex = codex ?? new CodexClient({ bin: config.codexBin, socketPath: config.codexAppServerSocket });
+    this.codex = codex ?? new CodexClient({ bin: config.codexBin, socketPath: config.codexAppServerSocket,
+      desktop: config.desktopSyncEnabled && config.codexAppServerSocket ? new DesktopContinuation({
+        socketPath: path.join(path.dirname(path.dirname(config.codexAppServerSocket)), "ipc", "ipc.sock")
+      }) : null });
     this.codexDaemon = codexDaemon === undefined ? new CodexDaemonManager({
       bin: config.codexBin,
       enabled: config.desktopSyncEnabled === true && Boolean(config.codexAppServerSocket)
@@ -136,6 +141,8 @@ export class Bridge {
     this.lastMessageAt = null;
     this.lastReplyAt = null;
     this.readyEventKeys = new Set();
+    this.larkConnectionState = "unverified";
+    this.lastLarkConnectionAt = null;
     this.reconnectTimers = new Map();
     this.larkReconnectAttempts = new Map();
     this.codexReconnectTimer = null;
@@ -201,7 +208,7 @@ export class Bridge {
     if (command.type === "unsupported_message") {
       return card(noticeCard({
         title: "暂不支持这种消息",
-        message: "2.1 支持文字、富文本、图片、文件、语音和视频文件。请换一种方式发送。",
+        message: "可以发文字、图片、文件或短语音。请换一种方式发送这条消息。",
         template: "yellow",
         status: "未处理"
       }));
@@ -209,7 +216,7 @@ export class Bridge {
     if (command.type === "removed_rename") {
       return card(noticeCard({
         title: "任务重命名已移除",
-        message: "2.1 不再提供飞书端重命名。需要修改名称时请在 Codex Desktop 中操作。",
+        message: "需要修改任务名称时，请在 Codex 中操作。",
         template: "grey",
         status: "功能已移除",
         action: { text: "任务首页", action: "home" }
@@ -218,7 +225,7 @@ export class Bridge {
     if (command.type === "small_talk") {
       return card(noticeCard({
         title: "我在",
-        message: "直接告诉我要做什么，或发送图片、文件、语音。我会自动判断是新建任务还是继续当前任务。",
+        message: "可以让我整理文字、总结材料或跟进一件事。接着处理已有事项，请点结果卡上的“继续这件事”；发起新事项，请点“交办新事项”。",
         template: "blue",
         status: "就绪",
         action: { text: "任务首页", action: "home" }
@@ -226,7 +233,7 @@ export class Bridge {
     }
     if (command.type === "health") return card(healthCard(this.#health()));
     if (command.type === "version") {
-      return card(noticeCard({ title: "Codex 飞书助手", message: `正式版 v${VERSION}\n详细进展 · 自然语言会话 · 多模态附件 · 定时任务 · 离线恢复`, status: "版本" }));
+      return card(noticeCard({ title: "飞书工作助手", message: `公开 Beta v${VERSION}\n交办事项 · 查看进展 · 接着处理\n任务在本机运行，电脑需保持唤醒和联网。`, status: "版本" }));
     }
     if (command.type === "notification_status") {
       const mutedUntil = this.state.mutedUntil();
@@ -246,6 +253,7 @@ export class Bridge {
     }
     if (command.type === "queue_list") return card(await this.#queueCard());
     if (command.type === "create_form") return card(createTaskFormCard(this.config.workspaces, this.config.defaultWorkspace));
+    if (command.type === "schedule_form") return card(scheduleCreateFormCard(this.config.defaultWorkspace ?? Object.keys(this.config.workspaces)[0]));
 
     if (command.type === "schedule_create") {
       const parsed = parseScheduleExpression(command.expression, {
@@ -344,7 +352,8 @@ export class Bridge {
       return card(taskListCard(threads, {
         queuedCount: this.state.allQueued().length + this.state.allOperations().length,
         filter: command.filter ?? null,
-        focusedThreadId: this.state.getChat(event.chat_id).focusedThreadId
+        focusedThreadId: this.state.getChat(event.chat_id).focusedThreadId,
+        health: this.#health()
       }));
     }
 
@@ -356,7 +365,8 @@ export class Bridge {
       await this.state.save();
       return card(taskListCard(threads, {
         queuedCount: this.state.allQueued().length + this.state.allOperations().length,
-        focusedThreadId: this.state.getChat(event.chat_id).focusedThreadId
+        focusedThreadId: this.state.getChat(event.chat_id).focusedThreadId,
+        health: this.#health()
       }));
     }
 
@@ -481,6 +491,23 @@ export class Bridge {
         action: { text: "查看任务", action: "progress", value: { threadId } }
       }), { threadId });
     }
+    if (command.type === "queue_retry") {
+      const queued = this.state.queuedFor(threadId)[0];
+      if (queued) {
+        const submissionId = queued.requestId ?? queued.id;
+        if (["submitting", "unknown"].includes(this.state.state.submissions[submissionId]?.status)) {
+          throw new SubmissionPendingError(submissionId);
+        }
+        queued.dispatchPaused = false;
+        queued.dispatchFailures = 0;
+        queued.retryAt = 0;
+        queued.lastError = null;
+        queued.failureNoticeQueued = false;
+        queued.retryGeneration = (queued.retryGeneration ?? 0) + 1;
+        await this.state.save();
+      }
+      return card(await this.#queueCard(), { threadId });
+    }
     if (command.type === "queue_cancel") {
       const removed = this.state.cancelQueue(threadId);
       await this.state.save();
@@ -558,7 +585,7 @@ export class Bridge {
         clientUserMessageId: submissionId
       }));
     } catch (error) {
-      if (/同步当前回合|找不到.*回合|current turn|expectedTurnId/i.test(error.message)) {
+      if (error.code === "QUEUE_TURN_ACTIVE" || /同步当前回合|找不到.*回合|current turn|expectedTurnId/i.test(error.message)) {
         return this.#queueThreadMessage(threadId, thread, command.message, event, attachments, "当前回合刚发生切换");
       }
       if (/already has an active writer/i.test(error.message)) {
@@ -644,11 +671,16 @@ export class Bridge {
       this.larkReconnectAttempts.set(eventKey, 0);
       this.logger.info("Lark event consumer ready", { eventKey });
     });
+    this.lark.on("connection", ({ state }) => {
+      this.larkConnectionState = state;
+      if (state === "connected") this.lastLarkConnectionAt = Date.now();
+    });
     this.lark.on("event", (envelope) => this.#track(
       this.#handleEvent(envelope).catch((error) => this.#logError("event handling failed", error))
     ));
     this.lark.on("exit", ({ eventKey, error }) => {
       this.readyEventKeys.delete(eventKey);
+      this.larkConnectionState = "unverified";
       this.#logError("Lark event consumer exited", error, { eventKey });
       if (!this.shuttingDown) this.#scheduleLarkReconnect(eventKey);
     });
@@ -750,7 +782,7 @@ export class Bridge {
     this.state.recordChat(event.chat_id, { chatType: isAllowedGroup(this.config, event.chat_id) ? "group" : "p2p", senderId: event.operator_id });
     const value = parseActionValue(event.action_value);
     const form = parseActionValue(event.form_value);
-    const action = value.action ?? ({ create_submit: "create", send_submit: "send" }[event.action_name]);
+    const action = value.action ?? ({ create_submit: "create", send_submit: "send", schedule_submit: "schedule_create" }[event.action_name]);
     this.logger.info("Feishu card action received", { eventId, chatId: event.chat_id, action });
     let response;
     try {
@@ -823,6 +855,7 @@ export class Bridge {
 
   #commandFromAction(action, value, form) {
     if (action === "home") return { type: "list", filter: value.filter ?? null };
+    if (action === "help") return { type: "help" };
     if (action === "create_form") return { type: "create_form" };
     if (action === "create") return { type: "create", workspace: form.workspace, message: form.prompt, effort: form.effort ?? "default" };
     if (action === "progress") return { type: "progress", selector: value.threadId };
@@ -840,11 +873,14 @@ export class Bridge {
     if (action === "stop") return { type: "stop", selector: value.threadId };
     if (action === "queue") return { type: "queue_list" };
     if (action === "queue_cancel") return { type: "queue_cancel", selector: value.threadId };
+    if (action === "queue_retry") return { type: "queue_retry", selector: value.threadId };
     if (action === "health") return { type: "health" };
     if (action === "clarify_continue") return { type: "resolve_intent", pendingId: value.pendingId, resolution: "continue" };
     if (action === "clarify_create") return { type: "resolve_intent", pendingId: value.pendingId, resolution: "create" };
     if (action === "clarify_cancel") return { type: "resolve_intent", pendingId: value.pendingId, resolution: "cancel" };
     if (action === "schedule_list") return { type: "schedule_list" };
+    if (action === "schedule_form") return { type: "schedule_form" };
+    if (action === "schedule_create") return { type: "schedule_create", expression: form.expression };
     if (action === "schedule_detail") return { type: "schedule_detail", scheduleId: value.scheduleId };
     if (action === "schedule_pause") return { type: "schedule_pause", scheduleId: value.scheduleId };
     if (action === "schedule_resume") return { type: "schedule_resume", scheduleId: value.scheduleId };
@@ -999,7 +1035,9 @@ export class Bridge {
   }
 
   async #queueCard() {
-    const items = this.state.allQueued();
+    const items = this.state.allQueued().map((item) => ({ ...item,
+      submissionUncertain: ["submitting", "unknown"].includes(this.state.state.submissions[item.requestId ?? item.id]?.status)
+    }));
     const titleLookup = new Map();
     await Promise.all([...new Set(items.map((item) => item.threadId))].map(async (threadId) => {
       try {
@@ -1313,7 +1351,29 @@ export class Bridge {
 
   async #notifyCompletion(threadId, turnStatus, watch, existingThread, resultOverride = "") {
     if (this.completionLanes.has(threadId)) return this.completionLanes.get(threadId);
+    const queued = this.state.queuedFor(threadId)[0];
+    if (queued?.dispatchPaused || queued?.retryAt > Date.now()) return;
     const pending = this.#settleCompletion(threadId, turnStatus, watch, existingThread, resultOverride)
+      .catch(async (error) => {
+        if (queued && this.state.queuedFor(threadId)[0]?.id === queued.id) {
+          queued.dispatchFailures = (queued.dispatchFailures ?? 0) + 1;
+          queued.lastError = error.message;
+          queued.retryAt = Date.now() + Math.min(300_000, 15_000 * 2 ** Math.min(queued.dispatchFailures - 1, 5));
+          queued.dispatchPaused = queued.dispatchFailures >= 5;
+          await this.state.save();
+          if (queued.dispatchFailures >= 3 && !queued.failureNoticeQueued && !this.state.isMuted()) {
+            await this.#deliverCard(queued.sourceMessageId, noticeCard({
+              title: "排队消息暂未发送成功",
+              message: `任务：${threadId}\n连续提交未成功，消息已保存；重试 5 次后暂停。请查看队列中的具体原因，不要重复发送。\n${queued.lastError}`,
+              template: "yellow", status: "需要关注",
+              action: { text: "查看队列", action: "queue" }
+            }), `queue-dispatch-delayed-${queued.id}-${queued.retryGeneration ?? 0}`, queued.chatId, threadId);
+            queued.failureNoticeQueued = true;
+            await this.state.save();
+          }
+        }
+        throw error;
+      })
       .finally(() => this.completionLanes.delete(threadId));
     this.completionLanes.set(threadId, pending);
     return pending;
@@ -1329,25 +1389,22 @@ export class Bridge {
       if (activeTurn && activeTurn.id !== watch.turnId) return;
       // Terminal evidence belongs to this exact turn; do not steer its stale
       // in-progress history representation after receiving turn/completed.
-      const settledThread = (value) => ({ ...value, status: { type: "idle" },
+      const settledThread = (value) => ({ ...value,
+        status: value.status?.type === "notLoaded" ? value.status : { type: "idle" },
         turns: (value.turns ?? []).map((item) => item.id === watch.turnId ? { ...item, status: turnStatus } : item) });
-      let dispatchThread = settledThread(thread);
+      const dispatchThread = settledThread(thread);
       let turn;
       const submissionId = next.requestId ?? next.id;
       const context = { type: "send", threadId, queueId: next.id, attachments: next.attachments,
         event: { chat_id: next.chatId, message_id: next.sourceMessageId, sender_id: next.senderId } };
       const submit = () => this.submissions.submit(submissionId, context, () => this.codex.sendMessage(threadId, next.text, dispatchThread, {
-        clientUserMessageId: submissionId, attachments: next.attachments ?? []
+        clientUserMessageId: submissionId, completedTurnId: watch.turnId, attachments: next.attachments ?? []
       }));
       try {
         turn = await submit();
       } catch (error) {
-        if (!isWriterConflict(error)) throw error;
-        await this.#releaseCodexThread(threadId);
-        const refreshed = await this.#enrichThread(await this.codex.readThread(threadId));
-        if (refreshed.turns?.some((item) => item.status === "inProgress" && item.id !== watch.turnId)) return;
-        dispatchThread = settledThread(refreshed);
-        turn = await submit();
+        if (error.code === "QUEUE_TURN_ACTIVE") return;
+        throw error;
       }
       this.state.shiftQueue(threadId);
       this.state.watchThread(threadId, {
@@ -1490,7 +1547,9 @@ export class Bridge {
       version: VERSION,
       uptime: durationLabel(Date.now() - this.startedAt),
       codexReady: Boolean(this.codex.ready),
-      larkReady: EVENT_KEYS.every((key) => this.readyEventKeys.has(key)),
+      larkReady: EVENT_KEYS.every((key) => this.readyEventKeys.has(key)) && this.larkConnectionState === "connected",
+      larkConnectionState: this.larkConnectionState,
+      lastConnectionAt: this.lastLarkConnectionAt,
       queuedCount: this.state.allQueued().length + this.state.allOperations().length,
       pendingDeliveryCount: Object.values(this.state.state.outbox).filter((entry) => entry.status === "pending").length,
       uncertainDeliveryCount: Object.values(this.state.state.outbox).filter((entry) => entry.status === "unknown").length,
@@ -1510,7 +1569,10 @@ export class Bridge {
 
   #errorResponse(error, title) {
     const pending = error instanceof SubmissionPendingError;
-    return card(noticeCard({ title: pending ? "请求待核对" : title, message: error.message,
+    const message = pending ? "消息可能已经被接收，正在核对结果。请勿重复发送；可以先查看当前任务。" :
+      /timeout|timed out|ECONN|network|socket/i.test(error.message) ? "连接暂时不稳定。请先查看任务状态，确认消息是否已被接收，再决定下一步。" : error.message;
+    return card(noticeCard({ title: pending ? "请求待核对" : title, message,
+      details: message === error.message ? null : error.message,
       template: pending ? "yellow" : "red", status: pending ? "待核对" : "失败",
       action: { text: "健康检查", action: "health" } }));
   }

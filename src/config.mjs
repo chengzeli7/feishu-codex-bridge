@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { validateGroupConfig } from "./group-policy.mjs";
+import { DESKTOP_CODEX_BIN, isDesktopCodexBin } from "./desktop-runtime.mjs";
 
 const DEFAULTS = {
   allowedUserIds: [],
@@ -34,12 +35,15 @@ const DEFAULTS = {
   larkProfile: null
 };
 
-export const DESKTOP_CODEX_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
+export { DESKTOP_CODEX_BIN } from "./desktop-runtime.mjs";
 
 export async function loadConfig(configPath = process.env.BRIDGE_CONFIG ?? "./config.local.json") {
   const absolutePath = path.resolve(configPath);
   const raw = JSON.parse(await readFile(absolutePath, "utf8"));
   const config = { ...DEFAULTS, ...raw };
+  if (config.desktopSyncEnabled && isDesktopCodexBin(config.codexBin)) {
+    config.codexBin = DESKTOP_CODEX_BIN;
+  }
   validateGroupConfig(config);
 
   if (!Array.isArray(config.allowedUserIds) || config.allowedUserIds.length !== 1) {

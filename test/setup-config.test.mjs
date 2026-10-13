@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildBridgeConfig, normalizeWorkspace, pairingIdentity, PAIRING_PHRASE } from "../src/setup-config.mjs";
+import { DESKTOP_CODEX_BIN } from "../src/desktop-runtime.mjs";
 
 test("accepts an exact private-chat pairing message", () => {
   assert.deepEqual(pairingIdentity({
@@ -42,7 +43,7 @@ test("builds a desktop-synced configuration without credentials", () => {
   assert.equal(config.desktopSyncEnabled, true);
   assert.equal(config.desktopAutoOpenEnabled, false);
   assert.equal(config.recentThreadLimit, 5);
-  assert.equal(config.codexBin, "/Applications/ChatGPT.app/Contents/Resources/codex");
+  assert.equal(config.codexBin, DESKTOP_CODEX_BIN);
   assert.equal(config.larkProfile, "edith");
   assert.equal(Object.hasOwn(config, "appSecret"), false);
 });
