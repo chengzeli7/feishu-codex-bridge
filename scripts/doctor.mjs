@@ -6,6 +6,15 @@ import { loadConfig } from "../src/config.mjs";
 
 const run = promisify(execFile);
 const config = await loadConfig();
+const args = process.argv.slice(2);
+const preflight = args.includes("--preflight");
+const larkIndex = args.indexOf("--lark-bin");
+if (larkIndex !== -1) {
+  if (!preflight || !args[larkIndex + 1] || args[larkIndex + 1].startsWith("--")) {
+    throw new Error("--lark-bin requires a path and is only supported with --preflight");
+  }
+  config.larkBin = args[larkIndex + 1];
+}
 const checks = [];
 const larkArgs = (args) => config.larkProfile ? ["--profile", config.larkProfile, ...args] : args;
 
@@ -33,7 +42,7 @@ for (const [alias, workspace] of Object.entries(config.workspaces)) {
   await check(`workspace:${alias}`, async () => { await access(workspace); return workspace; });
 }
 await check("codex", async () => (await run(config.codexBin, ["--version"])).stdout.trim());
-if (config.codexAppServerSocket) {
+if (config.codexAppServerSocket && !preflight) {
   await check("official app-server socket", async () => {
     await access(config.codexAppServerSocket);
     return config.codexAppServerSocket;
@@ -58,4 +67,5 @@ await check("lark bot auth", async () => {
 await check("ffmpeg (optional voice input)", async () => (await run(config.ffmpegBin, ["-version"])).stdout.split("\n")[0], { required: false });
 
 for (const item of checks) console.log(`${item.ok ? "PASS" : item.required ? "FAIL" : "WARN"}  ${item.name}  ${item.detail}`);
+if (preflight) console.log("PREFLIGHT ONLY  Run doctor again after service installation to verify the shared daemon.");
 if (checks.some((item) => item.required && !item.ok)) process.exitCode = 1;

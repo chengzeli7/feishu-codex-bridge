@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { validateGroupConfig } from "./group-policy.mjs";
@@ -37,7 +38,14 @@ const DEFAULTS = {
 
 export { DESKTOP_CODEX_BIN } from "./desktop-runtime.mjs";
 
-export async function loadConfig(configPath = process.env.BRIDGE_CONFIG ?? "./config.local.json") {
+export function defaultConfigPath({ env = process.env, cwd = process.cwd(), home = os.homedir(), exists = existsSync } = {}) {
+  if (env.BRIDGE_CONFIG) return env.BRIDGE_CONFIG;
+  const local = path.join(cwd, "config.local.json");
+  const installed = path.join(home, "Library", "Application Support", "CodexFeishuBridge", "config.json");
+  return exists(local) || !exists(installed) ? local : installed;
+}
+
+export async function loadConfig(configPath = defaultConfigPath()) {
   const absolutePath = path.resolve(configPath);
   const raw = JSON.parse(await readFile(absolutePath, "utf8"));
   const config = { ...DEFAULTS, ...raw };

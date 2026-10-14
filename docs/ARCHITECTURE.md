@@ -43,11 +43,20 @@ language aliases help routing but never grant access to additional directories.
 3. It submits the turn through the shared local app-server.
 4. Progress snapshots are filtered and rendered as Feishu cards.
 5. The task writer is released when the turn ends so Desktop can reopen it.
-6. If another process still owns the writer, follow-ups wait in a durable queue.
+6. If Desktop owns the writer, the local follower protocol routes continuation to
+   that owner. Busy owners or pending approvals keep the message in the durable queue.
 7. Completion, failure, or required user action produces a notification.
 
 This ownership model avoids opening the same task as competing writers. Desktop
 synchronization is passive by default and does not navigate to task windows.
+The local Desktop owner protocol remains a compatibility dependency and needs
+revalidation after Desktop updates.
+
+Definite queue failures back off and pause after five attempts, with recovery
+controls attached to the task. Uncertain submissions stay held for history
+reconciliation. Connection evidence comes from transport signals, real direct
+events, or newly delivered event files; startup backlog and stale retries do
+not establish a new connection. Listener readiness is not end-to-end acceptance.
 
 ## Local state and recovery
 

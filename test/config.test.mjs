@@ -3,8 +3,17 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loadConfig } from "../src/config.mjs";
+import { defaultConfigPath, loadConfig } from "../src/config.mjs";
 import { DESKTOP_CODEX_BIN, DESKTOP_CODEX_PATHS } from "../src/desktop-runtime.mjs";
+
+test("diagnostics find installed config while explicit and source configs keep precedence", () => {
+  const options = { env: {}, cwd: "/tmp/source", home: "/tmp/user" };
+  const installed = "/tmp/user/Library/Application Support/CodexFeishuBridge/config.json";
+  assert.equal(defaultConfigPath({ ...options, exists: () => true }), "/tmp/source/config.local.json");
+  assert.equal(defaultConfigPath({ ...options, exists: (p) => p === installed }), installed);
+  assert.equal(defaultConfigPath({ ...options, exists: () => false }), "/tmp/source/config.local.json");
+  assert.equal(defaultConfigPath({ ...options, exists: () => true, env: { BRIDGE_CONFIG: "/tmp/custom.json" } }), "/tmp/custom.json");
+});
 
 test("upgrades either known Desktop layout without weakening runtime validation", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "bridge-config-"));

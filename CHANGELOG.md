@@ -1,17 +1,19 @@
 # Changelog
 
-## 0.1.6
+All notable public changes are documented here. This project follows [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+## [0.1.6] - 2026-10-14
 
 - Simplify all Card 2.0 pages with one full-width primary action, two-column secondary controls, and separate navigation.
 - Clarify ordinary follow-ups when a task is selected, preserving quoted replies and explicit continuation commands.
 - Add a schedule creation form and keep recovery actions attached to their task.
 - Distinguish listener readiness from an observed Feishu connection and protect uncertain submissions from manual retries.
 - Support the current and legacy Codex Desktop executable layouts.
-
-
-All notable public changes are documented here. This project follows [Semantic Versioning](https://semver.org/).
-
-## [Unreleased]
+- Route continuation through the Desktop task owner, retain submission identity, and pause repeatedly failing queued dispatches.
+- Preserve the one-prompt installation contract while fixing fresh-install daemon checks, upgrade profile selection, installed dependency links, persistent Node PATH, and source-data migration.
+- Add isolated installation/upgrade regressions and refresh bilingual README, card previews, installation, recovery, and release guidance.
 
 ## [0.1.5] - 2026-09-07
 
