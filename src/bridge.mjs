@@ -1447,7 +1447,7 @@ export class Bridge {
       const answer = resultOverride || finalAnswer(targetTurn);
       if (!answer && turnStatus === "completed" && Date.now() - (watch.outcome?.observedAt ?? 0) < 10_000) return;
       const resultCard = completionCard(thread, turnStatus, outcomeText({ status: turnStatus,
-        answer }));
+        answer, error: targetTurn?.error ?? watch.outcome?.error }));
       const sent = await this.#deliverCard(watch.messageId, resultCard,
         `done-${threadId}-${watch.turnId ?? "latest"}`, watch.chatId, threadId);
       if (sent?.message_id) this.state.bindMessage(sent.message_id, { threadId, chatId: watch.chatId, kind: "completion" });

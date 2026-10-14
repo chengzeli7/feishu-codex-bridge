@@ -5,6 +5,25 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readRolloutSnapshot } from "../src/rollout-monitor.mjs";
 
+test("a task_complete event carrying a provider error is failure, including after an earlier successful turn", async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "rollout-failure-"));
+  const file = path.join(dir, "rollout.jsonl");
+  try {
+    const error = { message: "exceeded retry limit, last status: 429 Too Many Requests" };
+    await writeFile(file, [
+      { type: "event_msg", payload: { type: "task_complete", turn_id: "old", last_agent_message: "old success" } },
+      { type: "event_msg", payload: { type: "task_started", turn_id: "current" } },
+      { type: "event_msg", payload: { type: "task_complete", turn_id: "current", error, last_agent_message: null, completed_at: 123 } }
+    ].map(JSON.stringify).join("\n") + "\n");
+    const snapshot = await readRolloutSnapshot(file);
+    assert.equal(snapshot.turnId, "current");
+    assert.equal(snapshot.status, "failed");
+    assert.equal(snapshot.result, "");
+    assert.deepEqual(snapshot.error, error);
+    assert.equal(snapshot.completedAt, 123);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("reads live commentary and task completion from a rollout", async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(), "rollout-monitor-"));
   const file = path.join(dir, "rollout.jsonl");

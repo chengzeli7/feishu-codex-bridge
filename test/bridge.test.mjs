@@ -244,6 +244,25 @@ test("completion ignores late old events and never substitutes another turn's an
   } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
 });
 
+test("rollout-polled provider failure sends a failure card instead of a successful empty result", async () => {
+  const error = { message: "exceeded retry limit, last status: 429 Too Many Requests" };
+  const thread = { id: "thread-rate-limit", name: "rate limit", status: { type: "notLoaded" },
+    turns: [{ id: "failed-turn", status: "failed", completedAt: 123, error, items: [] }] };
+  const { bridge, lark, tempDir } = await makeBridge(thread, { pollIntervalMs: 20 });
+  try {
+    const rolloutPath = path.join(tempDir, "rollout.jsonl");
+    await writeFile(rolloutPath, JSON.stringify({ type: "event_msg", payload: {
+      type: "task_complete", turn_id: "failed-turn", last_agent_message: null, error, completed_at: 123
+    } }) + "\n");
+    bridge.state.watchThread(thread.id, { turnId: "failed-turn", rolloutPath, messageId: "om_source", chatId: "oc_chat" });
+    await waitFor(() => bridge.state.getWatch(thread.id).notified);
+    assert.equal(lark.replies.length, 1);
+    assert.equal(lark.replies[0].content.header.template, "red");
+    assert.match(JSON.stringify(lark.replies[0].content), /限流（429）/);
+    assert.doesNotMatch(JSON.stringify(lark.replies[0].content), /这件事已完成|本轮已结束/);
+  } finally { await bridge.stop(); await rm(tempDir, { recursive: true, force: true }); }
+});
+
 test("an ambiguous card update does not emit a duplicate fallback message", async () => {
   const { bridge, lark, tempDir } = await makeBridge(null);
   lark.updateCard = async () => { throw new Error("timeout after accepted update"); };

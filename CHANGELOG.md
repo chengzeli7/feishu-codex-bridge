@@ -9,6 +9,7 @@ All notable public changes are documented here. This project follows [Semantic V
 - Simplify all Card 2.0 pages with one full-width primary action, two-column secondary controls, and separate navigation.
 - Clarify ordinary follow-ups when a task is selected, preserving quoted replies and explicit continuation commands.
 - Add a schedule creation form and keep recovery actions attached to their task.
+- Treat terminal rollout events carrying provider errors as failed, including rate limits, instead of reporting an empty successful result.
 - Distinguish listener readiness from an observed Feishu connection and protect uncertain submissions from manual retries.
 - Support the current and legacy Codex Desktop executable layouts.
 - Route continuation through the Desktop task owner, retain submission identity, and pause repeatedly failing queued dispatches.

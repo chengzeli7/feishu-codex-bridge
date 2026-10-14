@@ -45,6 +45,8 @@ The bridge does not require every request to be a coding task.
   remain held for verification instead of exposing a blind retry.
 - **Accurate connection hints:** listener startup alone is not reported as a
   confirmed Feishu connection. Fresh event-file delivery also updates the status.
+- **Honest completion status:** provider errors in terminal events remain failures;
+  rate limits are reported instead of showing an empty successful result.
 - **Desktop compatibility:** supports both bundled executable layouts and routes
   continuation through the existing Desktop owner without taking its writer.
 - **Safer installation and upgrades:** preflight checks precede daemon startup;
