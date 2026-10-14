@@ -65,3 +65,16 @@ test("keeps greetings out of Codex and recognizes natural schedules", () => {
     defaultWorkspace: "android-main"
   }).type, "create");
 });
+
+test('ordinary follow-ups after viewing a task ask for a target instead of silently creating work', () => {
+  for (const content of ['不调用工具，只回复验证通过', '帮我整理成三个要点', '检查记忆项目']) {
+    const route = routeNaturalMessage({ content, chatState: { focusedThreadId: 'original' }, workspaces,
+      workspaceAliases: aliases, defaultWorkspace: 'android-main' });
+    assert.equal(route.type, 'clarify');
+    assert.equal(route.threadId, 'original');
+    assert.equal(route.message, content);
+  }
+  assert.equal(routeNaturalMessage({ content: '不调用工具，只回复验证通过', boundThreadId: 'quoted',
+    chatState: { focusedThreadId: 'different' }, workspaces }).selector, 'quoted');
+  assert.equal(routeNaturalMessage({ content: '继续整理待办', chatState: { focusedThreadId: 'original' }, workspaces }).type, 'send');
+});

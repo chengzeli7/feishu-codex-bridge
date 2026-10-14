@@ -9,19 +9,22 @@ export function finalAnswer(turn) {
 export function confirmedOutcome(turn, { authoritative = false, rollout = null } = {}) {
   if (!turn?.id) return null;
   if (authoritative && TERMINAL_STATUSES.has(turn.status)) {
-    return { turnId: turn.id, status: turn.status, answer: finalAnswer(turn), observedAt: Date.now() };
-  }
-  if (rollout?.turnId === turn.id && TERMINAL_STATUSES.has(rollout.status)) {
-    return { turnId: turn.id, status: rollout.status, answer: rollout.result || finalAnswer(turn), observedAt: Date.now() };
+    return { turnId: turn.id, status: turn.status, answer: finalAnswer(turn), error: turn.error ?? null, observedAt: Date.now() };
   }
   if (TERMINAL_STATUSES.has(turn.status) && turn.completedAt != null) {
-    return { turnId: turn.id, status: turn.status, answer: finalAnswer(turn), observedAt: Date.now() };
+    return { turnId: turn.id, status: turn.status, answer: finalAnswer(turn), error: turn.error ?? null, observedAt: Date.now() };
+  }
+  if (rollout?.turnId === turn.id && TERMINAL_STATUSES.has(rollout.status)) {
+    return { turnId: turn.id, status: rollout.status, answer: rollout.result || finalAnswer(turn), error: rollout.error ?? null, observedAt: Date.now() };
   }
   return null;
 }
 
 export function outcomeText(outcome) {
   if (outcome.answer) return outcome.answer;
+  if (outcome.status === "failed" && /429|too many requests/i.test(outcome.error?.message ?? "")) {
+    return "Codex 请求被限流（429），本轮未完成；请稍后再继续。";
+  }
   return outcome.status === "completed" ? "本轮已结束，但未提供最终文字答复。" :
     outcome.status === "interrupted" ? "本轮已停止；你可以发送新消息继续此任务。" :
       "本轮执行失败，未提供最终文字答复；你可以查看详细进展后继续。";

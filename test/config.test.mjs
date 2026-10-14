@@ -3,7 +3,31 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loadConfig } from "../src/config.mjs";
+import { defaultConfigPath, loadConfig } from "../src/config.mjs";
+import { DESKTOP_CODEX_BIN, DESKTOP_CODEX_PATHS } from "../src/desktop-runtime.mjs";
+
+test("diagnostics find installed config while explicit and source configs keep precedence", () => {
+  const options = { env: {}, cwd: "/tmp/source", home: "/tmp/user" };
+  const installed = "/tmp/user/Library/Application Support/CodexFeishuBridge/config.json";
+  assert.equal(defaultConfigPath({ ...options, exists: () => true }), "/tmp/source/config.local.json");
+  assert.equal(defaultConfigPath({ ...options, exists: (p) => p === installed }), installed);
+  assert.equal(defaultConfigPath({ ...options, exists: () => false }), "/tmp/source/config.local.json");
+  assert.equal(defaultConfigPath({ ...options, exists: () => true, env: { BRIDGE_CONFIG: "/tmp/custom.json" } }), "/tmp/custom.json");
+});
+
+test("upgrades either known Desktop layout without weakening runtime validation", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "bridge-config-"));
+  const file = path.join(directory, "config.json");
+  try {
+    for (const codexBin of DESKTOP_CODEX_PATHS) {
+      await writeFile(file, JSON.stringify({ allowedUserIds: ["ou_test"], workspaces: { app: "/tmp/app" },
+        desktopSyncEnabled: true, codexBin }));
+      assert.equal((await loadConfig(file)).codexBin, DESKTOP_CODEX_BIN);
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("loads and resolves a valid single-user configuration", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "bridge-config-"));

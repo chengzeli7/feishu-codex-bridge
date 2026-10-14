@@ -4,13 +4,13 @@ import { execFileSync, spawnSync } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defaultCodexAppServerSocket } from "../src/config.mjs";
+import { defaultCodexAppServerSocket, loadConfig } from "../src/config.mjs";
+import { DESKTOP_CODEX_BIN, isDesktopCodexBin } from "../src/desktop-runtime.mjs";
 import { enableDesktopDaemonEnvironment } from "../src/desktop-daemon-env.mjs";
 import { VERSION } from "../src/version.mjs";
 
 const LABEL = "io.github.chengzeli7.feishu-codex-bridge";
 const LEGACY_LABELS = ["com.chengze.codex-feishu-bridge", "com.chengze.codex-feishu-app-server"];
-const DESKTOP_CODEX_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
 const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const userHome = os.homedir();
 const supportRoot = path.join(userHome, "Library", "Application Support", "CodexFeishuBridge");
@@ -37,18 +37,19 @@ function stamp() {
   return new Date().toISOString().replaceAll(/[:.]/g, "-");
 }
 
+function officialDaemonReady() {
+  const result = spawnSync(DESKTOP_CODEX_BIN, ["app-server", "daemon", "version"], { encoding: "utf8", timeout: 2_500 });
+  if (result.status !== 0) return false;
+  try {
+    const status = JSON.parse(result.stdout);
+    return status.status === "running" && status.socketPath === defaultCodexAppServerSocket() && Boolean(status.appServerVersion);
+  } catch { return false; }
+}
+
 function waitForOfficialDaemon(timeoutMs = 15_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const result = spawnSync(DESKTOP_CODEX_BIN, ["app-server", "daemon", "version"], { encoding: "utf8", timeout: 2_500 });
-    if (result.status === 0) {
-      try {
-        const status = JSON.parse(result.stdout);
-        if (status.status === "running" && status.socketPath === defaultCodexAppServerSocket()) return;
-      } catch {
-        // Retry until the official daemon is accepting protocol requests.
-      }
-    }
+    if (officialDaemonReady()) return;
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
   }
   throw new Error("official Codex app-server daemon did not become ready within 15 seconds");
@@ -94,28 +95,52 @@ async function migrateLegacyLaunchAgents() {
 }
 
 async function install() {
+  if (process.platform !== "darwin") throw new Error("Service installation requires macOS");
+  if (Number(process.versions.node.split(".")[0]) < 20) throw new Error("Node.js 20 or later is required");
+  if (!existsSync(DESKTOP_CODEX_BIN)) throw new Error(`Codex Desktop runtime is missing: ${DESKTOP_CODEX_BIN}`);
+  const sourceConfigPath = path.join(sourceRoot, "config.local.json");
+  if (!existsSync(configPath) && !existsSync(sourceConfigPath)) {
+    throw new Error("bridge configuration is missing; run feishu-codex-bridge init or npm run setup first");
+  }
   const desktopWasRunning = spawnSync("/usr/bin/pgrep", ["-f", "/Applications/ChatGPT.app/Contents/Frameworks/Codex Framework"], { stdio: "ignore" }).status === 0;
+  // New Desktop versions install a missing standalone daemon on start;
+  // bootstrap alone requires that executable to already exist.
+  const daemonEnvironment = enableDesktopDaemonEnvironment();
+  if (!officialDaemonReady()) {
+    shell(DESKTOP_CODEX_BIN, ["app-server", "daemon", "start"]);
+    shell(DESKTOP_CODEX_BIN, ["app-server", "daemon", "bootstrap"]);
+    waitForOfficialDaemon();
+  }
   const releaseRoot = path.join(releasesRoot, `${VERSION}-${stamp()}`);
   await mkdir(releasesRoot, { recursive: true, mode: 0o700 });
   await cp(sourceRoot, releaseRoot, {
     recursive: true,
+    verbatimSymlinks: true,
     filter(source) {
       const relative = path.relative(sourceRoot, source);
       if (!relative) return true;
       const top = relative.split(path.sep)[0];
-      return !["data", "dist", ".git", "config.local.json"].includes(top);
+      return !["data", "dist", ".git", ".agents", ".codex", ".aws", "coverage"].includes(top) &&
+        !/^config\..*local\.json$/.test(top) && !/^\.env(?:\.|$)/.test(top);
     }
   });
   await mkdir(dataRoot, { recursive: true, mode: 0o700 });
   await mkdir(logsRoot, { recursive: true, mode: 0o700 });
   await mkdir(agentsRoot, { recursive: true });
 
-  const sourceConfigPath = path.join(sourceRoot, "config.local.json");
+  const backupSuffix = `.backup-${stamp()}`;
+  if (existsSync(configPath)) await copyFile(configPath, `${configPath}${backupSuffix}`);
+  if (existsSync(plistPath)) await copyFile(plistPath, `${plistPath}${backupSuffix}`);
   if (!existsSync(configPath)) {
     if (!existsSync(sourceConfigPath)) {
       throw new Error("bridge configuration is missing; run feishu-codex-bridge init or npm run setup first");
     }
-    await copyFile(sourceConfigPath, configPath);
+    // Keep all existing source-install data at its original absolute path.
+    // Moving only state.json would strand attachment files and event spools.
+    const source = await loadConfig(sourceConfigPath);
+    const imported = JSON.parse(await readFile(sourceConfigPath, "utf8"));
+    for (const key of ["stateFile", "eventSpoolDir", "attachmentsDir", "logFile", "lockFile"]) imported[key] = source[key];
+    await writeFile(configPath, `${JSON.stringify(imported, null, 2)}\n`, { mode: 0o600, flag: "wx" });
     await chmod(configPath, 0o600);
   }
   const installedConfig = JSON.parse(await readFile(configPath, "utf8"));
@@ -144,15 +169,7 @@ async function install() {
     installedConfig.recentThreadLimit = 5;
     changed = true;
   }
-  for (const [alias, workspace] of Object.entries(installedConfig.workspaces ?? {})) {
-    if (sourceConfig.workspaces?.[alias] === undefined && !existsSync(workspace)) {
-      delete installedConfig.workspaces[alias];
-      if (installedConfig.workspaceAliases) delete installedConfig.workspaceAliases[alias];
-      changed = true;
-      console.log(`removed unavailable workspace ${alias}: ${workspace}`);
-    }
-  }
-  if (usesLegacyCodex) {
+  if (usesLegacyCodex || (isDesktopCodexBin(installedConfig.codexBin) && installedConfig.codexBin !== DESKTOP_CODEX_BIN)) {
     installedConfig.codexBin = DESKTOP_CODEX_BIN;
     changed = true;
   }
@@ -173,12 +190,6 @@ async function install() {
     await writeFile(configPath, `${JSON.stringify(installedConfig, null, 2)}\n`, { mode: 0o600 });
     await chmod(configPath, 0o600);
   }
-  const installedState = path.join(dataRoot, "state.json");
-  if (!existsSync(installedState) && existsSync(path.join(sourceRoot, "data", "state.json"))) {
-    await copyFile(path.join(sourceRoot, "data", "state.json"), installedState);
-    await chmod(installedState, 0o600);
-  }
-
   const nodeBin = existsSync(process.execPath)
     ? process.execPath
     : execFileSync("which", ["node"], { encoding: "utf8" }).trim();
@@ -198,7 +209,7 @@ async function install() {
   <key>EnvironmentVariables</key>
   <dict>
     <key>BRIDGE_CONFIG</key><string>${xml(configPath)}</string>
-    <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>PATH</key><string>${xml(`${path.dirname(nodeBin)}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin`)}</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key>
@@ -212,20 +223,17 @@ async function install() {
 `;
   await writeFile(plistPath, plist, { mode: 0o600 });
   shell("plutil", ["-lint", plistPath]);
-  enableDesktopDaemonEnvironment();
-  shell(DESKTOP_CODEX_BIN, ["app-server", "daemon", "bootstrap"]);
-  waitForOfficialDaemon();
   await migrateLegacyLaunchAgents();
   shell("launchctl", ["bootout", `${domain}/${LABEL}`], { allowFailure: true, capture: true });
   if (!waitForLaunchAgentState(false)) throw new Error(`${LABEL} did not stop within 5 seconds`);
   shell("launchctl", ["enable", `${domain}/${LABEL}`]);
   bootstrapLaunchAgent();
-  console.log("bootstrapped official Codex app-server daemon");
+  console.log("verified shared Codex app-server daemon");
   console.log(`installed ${LABEL}`);
   console.log(`release ${releaseRoot}`);
   console.log(`config  ${configPath}`);
   console.log(`logs    ${logsRoot}`);
-  if (desktopWasRunning) {
+  if (desktopWasRunning && daemonEnvironment.changed) {
     console.log("IMPORTANT: quit and reopen Codex Desktop once before sending the first Feishu task so it joins the shared app-server.");
   }
 }
@@ -248,9 +256,9 @@ function printServiceStatus(label) {
     console.log(`${label}: not loaded`);
     return false;
   }
-  const lines = result.stdout.split("\n").filter((line) => /state =|pid =|last exit code =|program =/.test(line));
+  const lines = result.stdout.split("\n").filter((line) => /^\s*(?:state|pid|last exit code|program) =/.test(line));
   console.log(`${label}:\n${lines.join("\n").trim()}`);
-  return true;
+  return /^\s*state = running$/m.test(result.stdout) && /^\s*pid = [1-9][0-9]*$/m.test(result.stdout);
 }
 
 function status() {

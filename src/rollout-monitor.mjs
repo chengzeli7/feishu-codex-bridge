@@ -70,7 +70,10 @@ export async function readRolloutSnapshot(filePath, {
     }
 
     if (event.type === "event_msg" && event.payload?.type === "task_complete" && event.payload.turn_id === current.turnId) {
-      current.status = "completed";
+      // task_complete marks termination, including provider failures. It is
+      // not proof of success when the terminal event carries an error.
+      current.status = event.payload.error ? "failed" : "completed";
+      current.error = event.payload.error ?? null;
       current.result = event.payload.last_agent_message?.trim() || current.result;
       current.completedAt = event.payload.completed_at ?? null;
     }

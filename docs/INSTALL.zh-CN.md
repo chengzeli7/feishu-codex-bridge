@@ -12,7 +12,7 @@ Feishu Codex Bridge 提供三种安装方式。推荐使用 Codex 托管安装�
 - Node.js 20 或更高版本
 - 一个启用机器人能力的飞书企业自建应用
 - 一个飞书用户和对应机器人私聊
-- 至少一个加入白名单的本地项目路径
+- 至少一个允许访问的目录，可以是日常材料目录，不必是代码仓库
 - 可选：语音转写需要 `ffmpeg`
 
 ## 方式 A：Codex 托管安装
@@ -30,10 +30,14 @@ Codex 会遵循仓库里的[安装约定](CODEX_INSTALL.md)，保护已有安装
 持久化 Node.js 运行时，在隔离目录下载项目，执行引导配置，安装当前用户的
 LaunchAgent，并完成健康检查。
 
-配置结束后退出并重新打开一次 Codex Desktop，再向机器人发送 `健康`。这次重启会让
-Desktop 和 Bridge 使用同一个本地 app-server。
+首次启用共享 daemon 时，如果 Desktop 已经打开，需要由你退出并重新打开一次；
+已使用共享 daemon 的正常升级不要求每次重启。安装完成后验证 `版本`、`健康`、`任务`，
+再验证一个无副作用请求及其同一事项续聊。完整验收标准见[安装约定](CODEX_INSTALL.md#6-verify-and-report)。
 
 ## 方式 B：Homebrew
+
+该 Tap 独立维护，可能晚于 GitHub Release。安装前用
+`brew info chengzeli7/tap/feishu-codex-bridge` 查看版本；需要 GitHub 最新版时使用方式 A。
 
 ```bash
 brew install chengzeli7/tap/feishu-codex-bridge
@@ -50,7 +54,8 @@ feishu-codex-bridge init
 ```bash
 git clone https://github.com/chengzeli7/feishu-codex-bridge.git
 cd feishu-codex-bridge
-npm ci
+git checkout v0.1.6
+npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 ```
 
 ### 2. 创建并发布飞书应用
@@ -74,8 +79,8 @@ npm ci
 ### 3. 在本机配置机器人
 
 ```bash
-lark-cli config init --new
-lark-cli auth status --json --verify
+./node_modules/.bin/lark-cli config init --new
+./node_modules/.bin/lark-cli auth status --json --verify
 ```
 
 App ID 和 App Secret 只保存在本机 `lark-cli` Profile，不要提交到仓库或通过
@@ -94,10 +99,9 @@ npm run setup
 ### 5. 验证并安装后台服务
 
 ```bash
-npm run doctor
-npm test
-npm run validate:cards
+npm run doctor -- --preflight
 npm run service -- install
+npm run doctor
 npm run service -- status
 ```
 
@@ -115,13 +119,12 @@ npm run service -- status
 
 ```bash
 npm ci --omit=dev --ignore-scripts --no-audit --no-fund
-npm run doctor
-npm run service -- install
-npm run service -- status
+node scripts/onboard.mjs
 ```
 
-安装器会创建新的版本目录，并保留已有配置、状态、飞书 Profile、日志和项目白名单。
-升级后退出并重新打开一次 Codex Desktop，再向机器人发送 `版本` 和 `健康`。
+安装器会创建新的版本目录、备份配置和 LaunchAgent，并保留状态、飞书 Profile、日志和项目白名单。
+升级不重新配对或切换飞书 Profile。向机器人发送 `版本` 和 `健康`，确认真实回复；
+首次切换共享 daemon 时才需要重启 Desktop。源码安装的既有状态、附件和事件目录保持原位置，不能删除。
 
 ## 下一步
 
@@ -129,3 +132,10 @@ npm run service -- status
 - [了解消息路由和命令](USAGE.zh-CN.md)
 - [排查安装或运行问题](TROUBLESHOOTING.zh-CN.md)
 - [部署到多台 Mac](MULTI_MAC.md)
+
+## 诊断与卸载
+
+Codex 托管安装不会自动往系统 PATH 安装全局命令。可继续让 Codex 诊断、升级或卸载；
+也可在安装日志指出的 release 目录运行 `node bin/feishu-codex-bridge.mjs doctor`、
+`status` 或 `uninstall`。从其他目录操作时，显式设置 `BRIDGE_CONFIG` 为已安装的 config 路径。
+卸载停止 Bridge 并保留配置、数据及共享 Codex daemon。Homebrew 用户可直接使用同名全局命令。

@@ -55,7 +55,7 @@ test("task list exposes at most the five most recent tasks without pagination", 
     .filter((item) => item.type === "callback" && item.value.action === "progress");
   const cardJson = JSON.stringify(card);
   assert.equal(taskCallbacks.length, 5);
-  assert.match(cardJson, /最近任务/);
+  assert.match(cardJson, /最近事项/);
   assert.match(cardJson, /任务 4/);
   assert.doesNotMatch(cardJson, /任务 5/);
   assert.doesNotMatch(cardJson, /上一页|下一页|1–3/);

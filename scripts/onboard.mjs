@@ -1,11 +1,12 @@
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractVerificationUrl, hasAvailableBot } from "../src/onboarding.mjs";
 import { VERSION } from "../src/version.mjs";
+import { DESKTOP_CODEX_BIN } from "../src/desktop-runtime.mjs";
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const supportRoot = path.join(os.homedir(), "Library", "Application Support", "CodexFeishuBridge");
@@ -14,6 +15,7 @@ const bundledLark = path.join(projectRoot, "node_modules", ".bin", "lark-cli");
 const larkBin = existsSync(bundledLark) ? bundledLark : "lark-cli";
 const quietEnv = {
   ...process.env,
+  PATH: `${path.dirname(process.execPath)}${path.delimiter}${process.env.PATH ?? ""}`,
   BRIDGE_CONFIG: configPath,
   LARKSUITE_CLI_NO_UPDATE_NOTIFIER: "1",
   LARKSUITE_CLI_NO_SKILLS_NOTIFIER: "1"
@@ -33,8 +35,8 @@ function runNode(relative, args = []) {
   if (result.status !== 0) throw new Error(`${relative} exited with ${result.status}`);
 }
 
-function botAvailable() {
-  const result = spawnSync(larkBin, ["auth", "status", "--json", "--verify"], {
+function botAvailable(profile = null) {
+  const result = spawnSync(larkBin, [...(profile ? ["--profile", profile] : []), "auth", "status", "--json", "--verify"], {
     cwd: projectRoot,
     encoding: "utf8",
     env: quietEnv
@@ -74,19 +76,30 @@ async function createFeishuApp() {
 
 async function main() {
   if (process.platform !== "darwin") throw new Error(`v${VERSION} guided installation currently supports macOS only`);
+  if (Number(process.versions.node.split(".")[0]) < 20) throw new Error("Node.js 20 or later is required");
   await mkdir(supportRoot, { recursive: true, mode: 0o700 });
 
   heading(1, "Check prerequisites");
-  if (!existsSync("/Applications/ChatGPT.app/Contents/Resources/codex")) {
+  if (!existsSync(DESKTOP_CODEX_BIN)) {
     throw new Error("ChatGPT Desktop is not installed at /Applications/ChatGPT.app");
   }
   if (!existsSync(bundledLark) && spawnSync("/usr/bin/which", ["lark-cli"]).status !== 0) {
     throw new Error("lark-cli is unavailable; install project dependencies with npm ci");
   }
+  // With npm --ignore-scripts, lark-cli downloads its native executable on its
+  // first invocation. Keep those setup logs out of the JSON auth response.
+  const larkVersion = spawnSync(larkBin, ["--version"], { cwd: projectRoot, stdio: "inherit", env: quietEnv });
+  if (larkVersion.error) throw larkVersion.error;
+  if (larkVersion.status !== 0) throw new Error("lark-cli executable initialization failed; the existing bot was not changed");
   console.log("Prerequisites are ready.");
 
   heading(2, "Create or reuse a Feishu app");
-  if (botAvailable()) console.log("A verified Feishu bot profile already exists; reusing it.");
+  const existing = existsSync(configPath) ? JSON.parse(await readFile(configPath, "utf8")) : null;
+  if (existing) {
+    if (!existing.larkProfile) throw new Error("Existing installation has no pinned larkProfile. Identify its original bot profile before upgrading; no app or pairing was changed.");
+    if (!botAvailable(existing.larkProfile)) throw new Error(`The installed bot profile ${existing.larkProfile} is unavailable. Repair this profile before upgrading; no replacement app was created.`);
+    console.log(`Reusing installed Feishu profile: ${existing.larkProfile}`);
+  } else if (botAvailable()) console.log("A verified Feishu bot profile already exists; reusing it.");
   else await createFeishuApp();
 
   heading(3, "Pair your private chat and choose workspaces");
@@ -94,15 +107,16 @@ async function main() {
   else runNode("scripts/setup.mjs");
 
   heading(4, "Run health checks and install the background service");
-  runNode("scripts/doctor.mjs");
+  runNode("scripts/doctor.mjs", ["--preflight", "--lark-bin", larkBin]);
   runNode("scripts/service.mjs", ["install"]);
+  runNode("scripts/doctor.mjs");
   runNode("scripts/service.mjs", ["status"]);
 
   heading(5, "Setup complete");
   console.log(`Feishu Codex Bridge is installed.
 
-Quit and reopen Codex Desktop once now. This one-time restart makes Desktop and
-the Feishu bridge share the same task writer and prevents "opened in another app".
+If this was the first shared-daemon setup while Desktop was open, quit and reopen
+Desktop once. Existing shared-daemon installations do not need a restart on every upgrade.
 
 Open the bot in Feishu and send:
   版本
@@ -110,7 +124,8 @@ Open the bot in Feishu and send:
   任务
 
 Configuration: ${configPath}
-Send “健康” in Feishu or ask Codex to check the service status at any time.`);
+Service checks passed. Real Feishu delivery and task continuation still need
+verification; send “健康” and a harmless test request to the paired bot.`);
 }
 
 main().catch((error) => {

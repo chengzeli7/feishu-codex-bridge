@@ -4,20 +4,21 @@
 
 **Run Codex from Feishu. Keep execution on your Mac.**
 
-A single-user, self-hosted companion for starting, monitoring, and continuing
-Codex Desktop tasks from a Feishu or Lark private chat.
+A personal work assistant for drafting, summarizing, project work, and follow-ups.
+Start a task in a Feishu or Lark private chat, check its progress, and continue
+with the same Codex context. Execution stays on your Mac.
 
 [Get started](docs/INSTALL.md) · [See how it works](docs/ARCHITECTURE.md) · [Usage guide](docs/USAGE.md) · [简体中文](README.zh-CN.md)
 
 [![CI](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/chengzeli7/feishu-codex-bridge/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.1.5-orange.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.1.6-orange.svg)](CHANGELOG.md)
 
 </div>
 
 ![Feishu Codex Bridge connects a private chat to Codex Desktop running on your Mac](docs/images/hero.png)
 
-> **Public beta:** `v0.1.5` uses local app-server capabilities currently bundled
+> **Public beta:** `v0.1.6` uses local app-server capabilities currently bundled
 > with Codex Desktop. A future Codex update may require a compatibility update.
 
 ## What problem does it solve?
@@ -25,37 +26,60 @@ Codex Desktop tasks from a Feishu or Lark private chat.
 Codex Desktop works on your Mac, but you are not always sitting in front of it.
 Feishu Codex Bridge turns a private bot chat into a lightweight task console:
 
-1. Send a normal message from Feishu to start a Codex task.
-2. Follow plans, commands, files, errors, and elapsed time in a task card.
-3. Reply to the card to continue the same task with its existing context.
-4. Receive a notification when the task finishes or needs you.
+1. Tap **交办新事项** (start new work), select an allowed workspace, and describe the task.
+2. Open the task to see its summary, plan, tools, changes, and any required action.
+3. Receive the result card, then tap **继续这件事** (continue this task) to follow up.
+4. Use **返回首页** (home) to switch tasks, inspect pending messages, or create a local schedule.
 
-Your repository, Codex session, credentials, and execution state remain on the Mac.
+A workspace can be a dedicated folder for everyday work or a project repository.
+The bridge does not require every request to be a coding task.
 
-## 20-second product tour
+## What is new in v0.1.6?
 
-![Product demo showing task creation, structured progress, completion, and continuation](docs/images/product-demo.gif)
+- **Clearer cards:** one large primary button per page, at most two secondary
+  buttons per row, and separate navigation. Completed tasks lead directly to continuation.
+- **Explicit message targets:** ordinary messages after viewing a task ask whether
+  to continue it or start another. Quoted replies and explicit commands stay direct.
+- **Recovery you can inspect:** pending messages stay beside their task. Definite
+  dispatch failures back off and pause after five attempts; uncertain submissions
+  remain held for verification instead of exposing a blind retry.
+- **Accurate connection hints:** listener startup alone is not reported as a
+  confirmed Feishu connection. Fresh event-file delivery also updates the status.
+- **Honest completion status:** provider errors in terminal events remain failures;
+  rate limits are reported instead of showing an empty successful result.
+- **Desktop compatibility:** supports both bundled executable layouts and routes
+  continuation through the existing Desktop owner without taking its writer.
+- **Safer installation and upgrades:** preflight checks precede daemon startup;
+  upgrades retain the paired bot profile and data, then verify the installed service.
 
-This is a reconstructed product demo with representative data—not a screenshot
-of a real user or repository. Open the full-size frames:
-[start a task](docs/images/demo-step-1.png) ·
-[follow progress](docs/images/demo-step-2.png) ·
-[get the result and continue](docs/images/demo-step-3.png) ·
-[watch the 12-second launch video](docs/media/x-launch-demo.mp4).
+See the [changelog](CHANGELOG.md) and [latest release](https://github.com/chengzeli7/feishu-codex-bridge/releases/latest).
 
-## The three everyday workflows
+## Current card preview
 
-| Start work remotely | Stay in the loop | Continue with context |
-|---|---|---|
-| Send a normal request or choose an allowlisted workspace. | Open the task list or detailed progress card without opening Codex Desktop. | Reply to a task card, or use an exact command when task selection must be deterministic. |
-| `Check why the latest tests failed` | Plan · tools/MCP · commands · changed files · errors | `继续1 Add a regression test` |
+| Home: choose the next action | Result: continue the same task |
+|---|---|
+| <img src="docs/images/v0.1.6-home.png" alt="v0.1.6 home card with one primary action and grouped tasks" width="360"> | <img src="docs/images/v0.1.6-result.png" alt="v0.1.6 result card with continue and home actions" width="360"> |
 
-The bridge also supports images, files, short voice messages, durable follow-up
-queues, completion watches, and one-time, daily, or weekly local schedules.
+These are HTML approximations rendered from the v0.1.6 Card 2.0 sample data,
+not native Feishu screenshots. Feishu controls the final rendering. The
+[earlier concept animation](docs/images/product-demo.gif) illustrates the basic
+workflow; its labels and layout predate this release.
 
-Replies are saved before delivery and retried with the same delivery key after
-temporary failures. An uncertain task submission is checked against Codex history
-instead of being blindly submitted again. See [recovery details](docs/ARCHITECTURE.md#local-state-and-recovery).
+## Everyday workflows
+
+| You want to… | Use this path |
+|---|---|
+| Start a new request | **交办新事项** → choose a workspace → submit. Plain text also creates work when no task is focused. |
+| Continue a result | **继续这件事**, quote the intended card, or send `继续1 Add a regression test`. Opening a card alone is not a quoted reply. |
+| Add an image or file | Send it in the bot chat composer, preferably as a quoted reply to the target card. The continuation form accepts text only. |
+| Check progress or a failure | Open the task summary and detailed progress. Additional permissions or human input are handled in Codex Desktop. |
+| Inspect waiting work | Open **待发送**. Check the exact task before retrying a definite failure; do not resend an uncertain submission. |
+| Schedule work | Home → **筛选与更多** → **定时事项** → **新增定时事项**. One-time, daily, and weekly schedules run on the Mac. |
+
+Short voice input is optional and needs Feishu ASR permission plus `ffmpeg`.
+Replies are persisted before delivery; uncertain task submissions are reconciled
+against exact IDs in Codex history. See [usage](docs/USAGE.md) and
+[recovery details](docs/ARCHITECTURE.md#local-state-and-recovery).
 
 ## Is it for you?
 
@@ -76,7 +100,7 @@ runtime, and project files all run locally on your Mac. Read the
 
 ## Quick start
 
-### Easiest: ask Codex to install it
+### One prompt to Codex — installation and upgrades
 
 Open a new Codex task on the target Mac and send this entire prompt:
 
@@ -92,16 +116,22 @@ setup, installs the per-user background service, and verifies it. You only step
 in for browser confirmation, Feishu app publication, macOS permission prompts,
 and the one-time private-chat pairing message.
 
-After installation, send these messages to the bot:
+Use the same prompt for an upgrade. Codex resolves the latest published release,
+keeps your paired bot and local state, and verifies the new installation. You do
+not need to copy terminal commands or install Homebrew for this path.
+
+If first-time shared-daemon setup requires a Desktop restart, Codex will say so;
+it must not close your active chat on your behalf. After verification, send:
 
 ```text
 健康
 任务
-Check this project for the latest failing test. Do not modify files yet.
+Summarize the following notes into three action items: …
 ```
 
 Prefer installing it yourself? See the complete [installation guide](docs/INSTALL.md)
-for Homebrew and source options.
+for source installation and the separately versioned Homebrew channel. Use the
+one-prompt path when you need the latest published release.
 
 ### What to expect
 
@@ -112,10 +142,16 @@ for Homebrew and source options.
 | Requires you | Browser confirmation, Feishu app publication, macOS prompts, one pairing message |
 | Installed data | `~/Library/Application Support/CodexFeishuBridge` |
 | Logs | `~/Library/Logs/CodexFeishuBridge` |
-| Removal | `feishu-codex-bridge uninstall` stops the service and preserves local data |
+| Removal | Ask Codex to stop/uninstall the bridge; configuration and data are preserved. Homebrew users can run `feishu-codex-bridge uninstall`. |
 
-The installer preserves existing bridge state, Feishu profiles, Codex settings,
-and project files. It does not change global Git configuration.
+The installer preserves existing bridge state, Feishu profiles, and project
+files. It enables the per-user shared Codex daemon environment and records the
+selected Node.js runtime in the LaunchAgent; it does not change global Git configuration.
+
+An installation is complete only after **doctor passes, the daemon and Bridge
+are running, and a real Feishu request returns a card**. A running process or
+listener-ready log alone does not prove end-to-end delivery. See the
+[installation acceptance checklist](docs/CODEX_INSTALL.md#6-verify-and-report).
 
 ## Safety by design
 
@@ -140,7 +176,9 @@ Review [SECURITY.md](SECURITY.md) before deployment.
 | Allowlisted local workspaces | Arbitrary directory access |
 
 The Mac must be awake and online. A sleeping or powered-off Mac cannot process
-messages; this is a local bridge, not a cloud relay.
+messages; this is a local bridge, not a cloud relay. Only events already received
+are persisted. Messages never delivered during a disconnect are not guaranteed
+to be recovered. A connection hint reflects observed activity, not continuous availability.
 
 The current Feishu cards and deterministic commands are Chinese-first. Natural
 language task prompts may be written in any language supported by Codex; full
@@ -151,7 +189,7 @@ card and command localization is planned for a later release.
 | Capability | Feishu Codex Bridge | Remote desktop | Generic chat bot |
 |---|---|---|---|
 | Structured Codex task progress | Built in | Visible only through the screen | Requires custom integration |
-| Continue the same Codex task | Direct card reply or command | Manual Desktop interaction | Requires custom task binding |
+| Continue the same Codex task | Continue button, quoted card reply, or command | Manual Desktop interaction | Requires custom task binding |
 | Code and credentials stay on the Mac | Yes | Yes | Depends on the bot architecture |
 | Mobile interaction | Native Feishu cards | Streamed desktop UI | Chat only |
 | Screen, mouse, and keyboard control | No | Yes | No |
@@ -214,6 +252,15 @@ More answers and diagnostic steps are in [Troubleshooting](docs/TROUBLESHOOTING.
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | No replies, writer conflicts, stale cards, voice, and diagnostics |
 | [Multiple Macs](docs/MULTI_MAC.en.md) | Why each Mac should use a separate Feishu app |
 | [Codex-managed installer](docs/CODEX_INSTALL.md) | The autonomous installation contract used by Codex |
+
+## Release and verification
+
+Every release keeps package metadata, bilingual docs, the Git tag, and the
+GitHub Release aligned so the one-prompt installer retrieves the intended build.
+CI runs the test suite and Card 2.0 validation on Node.js 20, 22, and 24. Installer
+regression tests run real setup and service scripts in an isolated filesystem,
+with macOS services and Feishu authentication/pairing simulated; live acceptance
+is recorded separately in the release notes. See the [release checklist](docs/RELEASING.md).
 
 ## Contributing
 

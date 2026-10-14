@@ -24,11 +24,12 @@ function createUnixWebSocket(socketPath) {
 }
 
 export class CodexClient extends EventEmitter {
-  constructor({ spawn = nodeSpawn, bin = "codex", socketPath = null, createWebSocket = createUnixWebSocket, requestTimeoutMs = 20_000 } = {}) {
+  constructor({ spawn = nodeSpawn, bin = "codex", socketPath = null, desktop = null, createWebSocket = createUnixWebSocket, requestTimeoutMs = 20_000 } = {}) {
     super();
     this.spawn = spawn;
     this.bin = bin;
     this.socketPath = socketPath;
+    this.desktop = desktop;
     this.createWebSocket = createWebSocket;
     this.requestTimeoutMs = requestTimeoutMs;
     this.nextId = 1;
@@ -234,9 +235,23 @@ export class CodexClient extends EventEmitter {
     return { thread: { ...started.thread, ...(name ? { name } : {}) }, turn: turnResult.turn };
   }
 
-  async sendMessage(threadId, text, thread = null, {
+  async sendMessage(threadId, text, thread = null, options = {}) {
+    try { return await this.#sendDirectMessage(threadId, text, thread, options); }
+    catch (error) {
+      if (!this.desktop || !/already has an active writer/i.test(error.message)) throw error;
+      // Route to the actual Desktop owner; unsubscribing our connection cannot
+      // release another process's writer and must not be used as a takeover.
+      return this.desktop.sendMessage(threadId, text, {
+        input: userInput(text, options.attachments ?? []),
+        clientUserMessageId: options.clientUserMessageId, approvalPolicy: "never"
+      });
+    }
+  }
+
+  async #sendDirectMessage(threadId, text, thread = null, {
     clientUserMessageId = null,
     expectedTurnId = null,
+    completedTurnId = null,
     attachments = []
   } = {}) {
     let activeThread = thread;
@@ -247,6 +262,19 @@ export class CodexClient extends EventEmitter {
     if (activeThread.status?.type === "active" && !activeThread.turns?.some((turn) => turn.status === "inProgress")) {
       activeThread = await this.readThread(threadId);
     }
+
+    const settleQueuedThread = () => {
+      if (!completedTurnId) return;
+      if (activeThread.turns?.some((turn) => turn.status === "inProgress" && turn.id !== completedTurnId)) {
+        throw Object.assign(new Error("任务已有新的回合，排队消息继续等待"), {
+          code: "QUEUE_TURN_ACTIVE", requestOutcome: "not_sent"
+        });
+      }
+      // Only the watched turn has terminal evidence. Never steer a newer turn
+      // discovered while restoring an unloaded task.
+      activeThread = { ...activeThread, status: { type: "idle" } };
+    };
+    settleQueuedThread();
 
     if (activeThread.status?.type === "active") {
       const activeTurnId = activeThread.turns?.findLast((turn) => turn.status === "inProgress")?.id ?? expectedTurnId;
@@ -259,7 +287,7 @@ export class CodexClient extends EventEmitter {
       return { id: result.turnId, status: "inProgress", items: [], steered: true };
     }
 
-    const result = await this.request("turn/start", {
+    const startTurn = () => this.request("turn/start", {
       threadId,
       input: userInput(text, attachments),
       approvalPolicy: "never",
@@ -269,6 +297,22 @@ export class CodexClient extends EventEmitter {
       } : {}),
       ...(clientUserMessageId ? { clientUserMessageId } : {})
     });
+    let result;
+    try {
+      result = await startTurn();
+    } catch (error) {
+      // The task can unload between read and write. Retry only a definite
+      // rejection, once, with the same client ID; never replay a timeout.
+      if (error.requestOutcome !== "rejected" || !/^thread not found:/i.test(error.message)) throw error;
+      activeThread = await this.#resumeThreadForInput(threadId);
+      settleQueuedThread();
+      if (activeThread.status?.type === "active") {
+        throw Object.assign(new Error("任务当前回合已变化，请等待同步后重试"), {
+          code: "QUEUE_TURN_ACTIVE", requestOutcome: "not_sent"
+        });
+      }
+      result = await startTurn();
+    }
     return result.turn;
   }
 
@@ -431,7 +475,7 @@ export function userInput(text, attachments = []) {
     `\n\n飞书附件已保存到以下受限本机路径，请读取后完成任务：\n${fileAttachments.map((attachment) => `- ${attachment.name}: ${attachment.path}`).join("\n")}` :
     "";
   return [
-    { type: "text", text: `${text}${references}`.trim() },
+    { type: "text", text: `${text}${references}`.trim(), text_elements: [] },
     ...attachments
       .filter((attachment) => attachment.kind === "image")
       .map((attachment) => ({ type: "localImage", path: attachment.path }))

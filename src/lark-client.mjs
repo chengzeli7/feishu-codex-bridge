@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { spawn as nodeSpawn } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, unlinkSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "node:fs";
 import path from "node:path";
 import { createInterface } from "node:readline";
 import { deliveryKey } from "./delivery-outbox.mjs";
@@ -42,6 +42,8 @@ export class LarkClient extends EventEmitter {
     this.inFlightIds = new Set();
     this.inFlightFiles = new Set();
     this.directoryEventKeys = new Map();
+    this.observedSpoolFiles = new Set();
+    this.transportEvidenceAfter = 0;
   }
 
   startConsumers(eventKeys = ["im.message.receive_v1", "card.action.trigger"]) {
@@ -57,6 +59,10 @@ export class LarkClient extends EventEmitter {
     const directory = eventDirectory(eventKey);
     this.directoryEventKeys.set(directory, eventKey);
     mkdirSync(path.join(this.spoolRoot, directory), { recursive: true, mode: 0o700 });
+    // Existing files are recovery backlog, not evidence of a live connection.
+    for (const file of readdirSync(path.join(this.spoolRoot, directory))) {
+      if (file.endsWith(".json")) this.observedSpoolFiles.add(path.join(this.spoolRoot, directory, file));
+    }
     const child = this.spawn(
       this.bin,
       this.#profileArgs(["event", "consume", eventKey, "--output-dir", directory, "--as", "bot"]),
@@ -71,13 +77,20 @@ export class LarkClient extends EventEmitter {
     createInterface({ input: child.stdout }).on("line", (line) => {
       if (!line.trim()) return;
       try {
-        this.#emitEvent(eventKey, JSON.parse(line));
+        const event = JSON.parse(line);
+        if (event.event_id || event.message_id) this.emit("connection", { eventKey, state: "connected" });
+        this.#emitEvent(eventKey, event);
       } catch {
         this.emit("log", `Ignored non-JSON lark event: ${line}`);
       }
     });
     createInterface({ input: child.stderr }).on("line", (line) => {
       this.emit("log", line);
+      const connection = line.match(/^\[source\] feishu-websocket: (connected|reconnecting|disconnected)\b/);
+      if (connection) {
+        if (connection[1] !== "connected") this.transportEvidenceAfter = Date.now();
+        this.emit("connection", { eventKey, state: connection[1] });
+      }
       if (line.includes(`[event] ready event_key=${eventKey}`)) this.emit("ready", eventKey);
     });
     child.once("exit", (code, signal) => {
@@ -194,6 +207,12 @@ export class LarkClient extends EventEmitter {
         if (this.inFlightFiles.has(filePath)) continue;
         try {
           const event = JSON.parse(readFileSync(filePath, "utf8"));
+          const firstObservation = !this.observedSpoolFiles.has(filePath);
+          this.observedSpoolFiles.add(filePath);
+          if (firstObservation && this.consumers.has(eventKey) &&
+              (event.event_id || event.message_id) && statSync(filePath).mtimeMs >= this.transportEvidenceAfter) {
+            this.emit("connection", { eventKey, state: "connected", source: "event_file" });
+          }
           this.#emitEvent(event.type ?? eventKey, event, filePath);
         } catch (error) {
           if (!(error instanceof SyntaxError) && error.code !== "ENOENT") {
@@ -209,6 +228,7 @@ export class LarkClient extends EventEmitter {
     if (eventId && (this.seenEventIds.has(eventId) || this.inFlightIds.has(eventId))) {
       if (filePath && this.seenEventIds.has(eventId)) {
         try { unlinkSync(filePath); } catch (error) { if (error.code !== "ENOENT") throw error; }
+        this.observedSpoolFiles.delete(filePath);
       }
       return;
     }
@@ -227,6 +247,7 @@ export class LarkClient extends EventEmitter {
       }
       if (filePath) {
         try { unlinkSync(filePath); } catch (error) { if (error.code !== "ENOENT") this.emit("log", `Failed to acknowledge event: ${error.message}`); }
+        this.observedSpoolFiles.delete(filePath);
       }
     };
     const envelope = { eventKey, event, ack: () => settle(true), nack: () => settle(false) };

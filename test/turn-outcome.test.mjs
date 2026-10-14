@@ -2,6 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { confirmedOutcome, finalAnswer, outcomeText } from "../src/turn-outcome.mjs";
 
+test("ended authoritative history takes precedence over a conflicting rollout success", () => {
+  const error = { message: "429 Too Many Requests" };
+  const outcome = confirmedOutcome({ id: "turn", status: "failed", completedAt: 123, error, items: [] },
+    { rollout: { turnId: "turn", status: "completed", result: "misleading success" } });
+  assert.equal(outcome.status, "failed");
+  assert.equal(outcome.answer, "");
+  assert.deepEqual(outcome.error, error);
+  assert.match(outcomeText(outcome), /限流（429）/);
+  assert.doesNotMatch(outcomeText(outcome), /已结束/);
+});
+
 test("terminal history requires an end timestamp or exact-turn authoritative evidence", () => {
   const turn = { id: "current", status: "interrupted", completedAt: null, items: [] };
   assert.equal(confirmedOutcome(turn), null);

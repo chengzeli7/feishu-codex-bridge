@@ -1,7 +1,9 @@
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { validateGroupConfig } from "./group-policy.mjs";
+import { DESKTOP_CODEX_BIN, isDesktopCodexBin } from "./desktop-runtime.mjs";
 
 const DEFAULTS = {
   allowedUserIds: [],
@@ -34,12 +36,22 @@ const DEFAULTS = {
   larkProfile: null
 };
 
-export const DESKTOP_CODEX_BIN = "/Applications/ChatGPT.app/Contents/Resources/codex";
+export { DESKTOP_CODEX_BIN } from "./desktop-runtime.mjs";
 
-export async function loadConfig(configPath = process.env.BRIDGE_CONFIG ?? "./config.local.json") {
+export function defaultConfigPath({ env = process.env, cwd = process.cwd(), home = os.homedir(), exists = existsSync } = {}) {
+  if (env.BRIDGE_CONFIG) return env.BRIDGE_CONFIG;
+  const local = path.join(cwd, "config.local.json");
+  const installed = path.join(home, "Library", "Application Support", "CodexFeishuBridge", "config.json");
+  return exists(local) || !exists(installed) ? local : installed;
+}
+
+export async function loadConfig(configPath = defaultConfigPath()) {
   const absolutePath = path.resolve(configPath);
   const raw = JSON.parse(await readFile(absolutePath, "utf8"));
   const config = { ...DEFAULTS, ...raw };
+  if (config.desktopSyncEnabled && isDesktopCodexBin(config.codexBin)) {
+    config.codexBin = DESKTOP_CODEX_BIN;
+  }
   validateGroupConfig(config);
 
   if (!Array.isArray(config.allowedUserIds) || config.allowedUserIds.length !== 1) {

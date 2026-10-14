@@ -199,3 +199,61 @@ test("thread replies are explicit and preserve the default private reply behavio
   await lark.replyCard("om_group", {}, "group-card", { replyInThread: true });
   assert.deepEqual(calls.map((args) => args.includes("--reply-in-thread")), [false, false, true, true]);
 });
+
+test("distinguishes local consumer readiness from transport connection and reconnection", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "lark-source-state-"));
+  const child = new EventEmitter(); child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.kill = () => true;
+  const client = new LarkClient({ spoolRoot: directory, spawn: () => child });
+  const states = []; client.on("connection", ({ state }) => states.push(state));
+  try {
+    client.startConsumer();
+    child.stderr.write("[event] ready event_key=im.message.receive_v1\n");
+    assert.deepEqual(states, []);
+    child.stderr.write("[source] feishu-websocket: connected\n[source] feishu-websocket: reconnecting (attempt 1)\n");
+    assert.deepEqual(states, ["connected", "reconnecting"]);
+    child.stdout.write(JSON.stringify({ event_id: "source-event", message_id: "om_source" }) + "\n");
+    assert.equal(states.at(-1), "connected");
+  } finally { await client.stop(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test("fresh file delivery confirms connection before dispatch, while startup backlog does not", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "lark-file-connection-"));
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  const spool = path.join(directory, "im_message_receive_v1");
+  await mkdir(spool);
+  await writeFile(path.join(spool, "old.json"), JSON.stringify({ message_id: "om_old" }));
+  const child = new EventEmitter(); child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.kill = () => true;
+  const client = new LarkClient({ spoolRoot: directory, spawn: () => child });
+  const connections = []; const events = [];
+  client.on("connection", (value) => connections.push(value));
+  client.on("event", (envelope) => { events.push({ id: envelope.event.message_id, connected: connections.at(-1)?.state }); envelope.ack(); });
+  try {
+    client.startConsumer();
+    await waitFor(() => events.length === 1);
+    assert.equal(connections.length, 0);
+    await writeFile(path.join(spool, "new.json"), JSON.stringify({ message_id: "om_new" }));
+    await waitFor(() => events.length === 2);
+    assert.equal(connections.length, 1);
+    assert.equal(connections[0].source, "event_file");
+    assert.equal(events[1].connected, "connected");
+  } finally { await client.stop(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test("a buffered file and retry cannot override a newer disconnect signal", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "lark-file-disconnect-"));
+  const { writeFile, utimes } = await import("node:fs/promises");
+  const child = new EventEmitter(); child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.stderr = new PassThrough(); child.kill = () => true;
+  const client = new LarkClient({ spoolRoot: directory, spawn: () => child });
+  const states = []; let received = 0;
+  client.on("connection", ({ state }) => states.push(state));
+  client.on("event", (envelope) => { received += 1; envelope.nack(); });
+  try {
+    client.startConsumer();
+    const file = path.join(directory, "im_message_receive_v1", "buffered.json");
+    await writeFile(file, JSON.stringify({ message_id: "om_buffered" }));
+    const past = new Date(Date.now() - 10000); await utimes(file, past, past);
+    child.stderr.write("[source] feishu-websocket: reconnecting (attempt 1)\n");
+    await waitFor(() => received >= 2);
+    assert.deepEqual(states, ["reconnecting"]);
+  } finally { await client.stop(); await rm(directory, { recursive: true, force: true }); }
+});

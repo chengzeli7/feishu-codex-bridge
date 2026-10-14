@@ -5,6 +5,80 @@ import assert from "node:assert/strict";
 import { CodexClient, userInput } from "../src/codex-client.mjs";
 import { VERSION } from "../src/version.mjs";
 
+test("restores a task unloaded between read and write once with the same input identity", async () => {
+  const client = new CodexClient({});
+  const requests = [];
+  client.request = async (method, params) => {
+    requests.push({ method, params });
+    if (method === "thread/resume") return { thread: { id: "thread", cwd: "/tmp/project", status: { type: "idle" } } };
+    if (requests.length === 1) throw Object.assign(new Error("thread not found: thread"), { requestOutcome: "rejected" });
+    return { turn: { id: "next" } };
+  };
+  const options = { clientUserMessageId: "request", attachments: [{ kind: "image", path: "/tmp/image.png" }] };
+  const result = await client.sendMessage("thread", "continue", { id: "thread", cwd: "/tmp/project", status: { type: "idle" } }, options);
+  assert.equal(result.id, "next");
+  assert.deepEqual(requests.map((item) => item.method), ["turn/start", "thread/resume", "turn/start"]);
+  assert.deepEqual(requests[0].params, requests[2].params);
+});
+
+test("never replays an uncertain start and bounds missing-thread recovery to one attempt", async () => {
+  for (const outcome of ["unknown", "rejected"]) {
+    const client = new CodexClient({});
+    const requests = [];
+    client.request = async (method) => {
+      requests.push(method);
+      if (method === "thread/resume") return { thread: { id: "thread", status: { type: "idle" } } };
+      throw Object.assign(new Error("thread not found: thread"), { requestOutcome: outcome });
+    };
+    await assert.rejects(client.sendMessage("thread", "continue", { id: "thread", status: { type: "idle" } }), /thread not found/);
+    assert.deepEqual(requests, outcome === "unknown" ? ["turn/start"] : ["turn/start", "thread/resume", "turn/start"]);
+  }
+});
+
+test("queued restoration waits for a newer turn instead of steering or starting it", async () => {
+  for (const initialStatus of ["notLoaded", "idle"]) {
+    const client = new CodexClient({});
+    const requests = [];
+    client.request = async (method) => {
+      requests.push(method);
+      if (method === "turn/start") throw Object.assign(new Error("thread not found: thread"), { requestOutcome: "rejected" });
+      assert.equal(method, "thread/resume");
+      return { thread: { id: "thread", status: { type: "active" }, turns: [{ id: "newer", status: "inProgress" }] } };
+    };
+    await assert.rejects(client.sendMessage("thread", "queued", { id: "thread", status: { type: initialStatus } }, {
+      completedTurnId: "old", clientUserMessageId: "request"
+    }), (error) => error.code === "QUEUE_TURN_ACTIVE" && error.requestOutcome === "not_sent");
+    assert.deepEqual(requests, initialStatus === "notLoaded" ? ["thread/resume"] : ["turn/start", "thread/resume"]);
+  }
+});
+
+test("terminal evidence overrides only the watched turn after resume", async () => {
+  const client = new CodexClient({});
+  const requests = [];
+  client.request = async (method) => {
+    requests.push(method);
+    if (method === "thread/resume") return { thread: { id: "thread", status: { type: "active" },
+      turns: [{ id: "old", status: "inProgress" }] } };
+    assert.equal(method, "turn/start");
+    return { turn: { id: "next" } };
+  };
+  assert.equal((await client.sendMessage("thread", "queued", { status: { type: "notLoaded" } }, { completedTurnId: "old" })).id, "next");
+  assert.deepEqual(requests, ["thread/resume", "turn/start"]);
+});
+
+test("a direct start rejected before resume never steers a newly active turn", async () => {
+  const client = new CodexClient({});
+  const requests = [];
+  client.request = async (method) => {
+    requests.push(method);
+    if (method === "turn/start") throw Object.assign(new Error("thread not found: thread"), { requestOutcome: "rejected" });
+    return { thread: { id: "thread", status: { type: "active" }, turns: [{ id: "new", status: "inProgress" }] } };
+  };
+  await assert.rejects(client.sendMessage("thread", "continue", { status: { type: "idle" } }),
+    (error) => error.code === "QUEUE_TURN_ACTIVE" && error.requestOutcome === "not_sent");
+  assert.deepEqual(requests, ["turn/start", "thread/resume"]);
+});
+
 test("reconciliation pages read-only history and matches clientId exactly", async () => {
   const client = new CodexClient({});
   const requests = [];
@@ -83,7 +157,8 @@ test("builds Codex input for images and readable file attachments", () => {
   ]), [
     {
       type: "text",
-      text: "分析附件\n\n飞书附件已保存到以下受限本机路径，请读取后完成任务：\n- report.pdf: /tmp/attachments/report.pdf"
+      text: "分析附件\n\n飞书附件已保存到以下受限本机路径，请读取后完成任务：\n- report.pdf: /tmp/attachments/report.pdf",
+      text_elements: []
     },
     { type: "localImage", path: "/tmp/attachments/screen.png" }
   ]);

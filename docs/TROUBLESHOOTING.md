@@ -2,7 +2,9 @@
 
 **English** | [简体中文](TROUBLESHOOTING.zh-CN.md)
 
-Start with the built-in diagnostics:
+Run diagnostics from the source or installed release directory. Set
+`BRIDGE_CONFIG` explicitly when more than one configuration exists; without a
+source config, doctor finds the current user’s installed configuration.
 
 ```bash
 npm run service -- status
@@ -33,9 +35,10 @@ npm run service -- restart
 After the first installation or an upgrade from an older build, quit and reopen
 Codex Desktop once. Desktop and the bridge must use the same local app-server.
 
-Current releases synchronize passively and release a completed task's writer.
-If Desktop still owns an active writer, the bridge queues the follow-up instead
-of competing for the task. Do not start a second bridge instance.
+v0.1.6 routes continuation to the existing Desktop owner through its local
+follower protocol. A busy owner or pending approval keeps the follow-up queued.
+If the owner cannot be found, open that task in Desktop, inspect the queue, then
+retry. Do not start a second bridge or resend an uncertain submission.
 
 ## A follow-up reports failure, but the task becomes active
 
@@ -63,6 +66,30 @@ process owns the task, confirm that the message appears under `队列`.
 
 Card callback tokens expire. Automatic in-place updates stop when the token is
 no longer valid; select **Refresh** to obtain a current snapshot and a new card.
+
+## Preflight versus installed health
+
+A fresh Mac uses `npm run doctor -- --preflight`, then installs the service,
+then runs full doctor. A missing daemon socket before bootstrap must not prevent
+first installation. Prefer `node scripts/onboard.mjs` for upgrades: it checks
+the installed profile and the new dependencies before replacing the service.
+Repair the original profile/configuration rather than deleting it to re-pair.
+
+## Messages work but the card says connection unverified
+
+Refresh home first; an old card is a snapshot. v0.1.6 updates connection evidence
+from actual direct events and fresh event-file delivery, excluding backlog and
+stale retries. If it stays unverified, inspect both consumers and an actual new
+message. Process status, a ready log, or the last-message time is not continuous
+availability evidence.
+
+## Queued messages are paused
+
+Definite dispatch failures back off and pause after five attempts. Inspect the
+specific task’s error, repair the connection, then choose its retry action. If
+you already resent the message manually, inspect/cancel the old queue first.
+Uncertain submissions offer task lookup instead of direct retry; verify the
+original task before doing anything that could execute the request again.
 
 ## Voice messages fail
 

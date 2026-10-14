@@ -13,7 +13,7 @@ asking for user input only when a browser, Feishu, macOS, or pairing action is r
 - Node.js 20 or later
 - One Feishu custom app with bot capability
 - One Feishu user and private chat
-- At least one local workspace path to allowlist
+- At least one allowed directory, which may hold everyday work rather than a code repository
 - Optional: `ffmpeg` for voice transcription
 
 ## Option A: Codex-managed installation
@@ -32,10 +32,16 @@ preserves an existing installation, selects a persistent Node.js runtime,
 downloads an isolated copy, runs setup, installs a per-user LaunchAgent, and
 performs health checks.
 
-After setup finishes, quit and reopen Codex Desktop once, then send `健康` to
-the bot. The restart puts Desktop and the bridge on the same local app-server.
+If Desktop was open before the first shared-daemon setup, quit and reopen it
+once. Normal upgrades already using the shared daemon do not require an
+unconditional restart. Verify `版本`, `健康`, `任务`, then a harmless request and
+a continuation of that same task. See the [acceptance checklist](CODEX_INSTALL.md#6-verify-and-report).
 
 ## Option B: Homebrew
+
+This tap is a separately versioned channel and may lag GitHub Releases. Check
+`brew info chengzeli7/tap/feishu-codex-bridge` before installing; use Option A
+for the latest published GitHub version.
 
 ```bash
 brew install chengzeli7/tap/feishu-codex-bridge
@@ -53,7 +59,8 @@ user, collects allowlisted workspaces, installs the service, and runs diagnostic
 ```bash
 git clone https://github.com/chengzeli7/feishu-codex-bridge.git
 cd feishu-codex-bridge
-npm ci
+git checkout v0.1.6
+npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 ```
 
 ### 2. Create and publish a Feishu app
@@ -79,8 +86,8 @@ events change.
 ### 3. Configure the bot locally
 
 ```bash
-lark-cli config init --new
-lark-cli auth status --json --verify
+./node_modules/.bin/lark-cli config init --new
+./node_modules/.bin/lark-cli auth status --json --verify
 ```
 
 Keep the App ID and App Secret in the local `lark-cli` profile. Never commit or
@@ -101,10 +108,9 @@ Then enter the absolute paths that the bot may use. The generated
 ### 5. Verify and install the service
 
 ```bash
-npm run doctor
-npm test
-npm run validate:cards
+npm run doctor -- --preflight
 npm run service -- install
+npm run doctor
 npm run service -- status
 ```
 
@@ -123,14 +129,14 @@ the latest published release and rerun:
 
 ```bash
 npm ci --omit=dev --ignore-scripts --no-audit --no-fund
-npm run doctor
-npm run service -- install
-npm run service -- status
+node scripts/onboard.mjs
 ```
 
-The installer creates a versioned release directory and preserves the existing
-configuration, state, Feishu profiles, logs, and allowlisted workspaces. Quit
-and reopen Codex Desktop once after the upgrade, then send `版本` and `健康`.
+The installer creates a versioned release, backs up configuration and the
+LaunchAgent, and preserves state, Feishu profiles, logs, and allowlisted
+workspaces. It does not re-pair or switch bots. Verify actual `版本` and `健康`
+replies; restart Desktop only when first switching to the shared daemon.
+An imported source installation retains its original data paths; do not delete them.
 
 ## Next steps
 
@@ -138,3 +144,12 @@ and reopen Codex Desktop once after the upgrade, then send `版本` and `健康`
 - [Learn the message model and commands](USAGE.md)
 - [Troubleshoot installation or runtime problems](TROUBLESHOOTING.md)
 - [Deploy on multiple Macs](MULTI_MAC.en.md)
+
+## Diagnostics and removal
+
+Codex-managed installation does not add a global command to the system PATH.
+Ask Codex to diagnose, upgrade, or uninstall it, or run
+`node bin/feishu-codex-bridge.mjs doctor`, `status`, or `uninstall` from the installed
+release directory printed by setup. Explicitly set `BRIDGE_CONFIG` to the installed
+config when working from another checkout. Uninstall stops the Bridge and preserves
+configuration, data, and the shared Codex daemon. Homebrew provides the global command.
